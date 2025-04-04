@@ -24,32 +24,22 @@ function displayCodeSideBySide(dbCode, fileCode, differences, options = {}) {
     const fileCodeElement = document.getElementById('file-code');
     const resultSummary = document.getElementById('result-summary');
     
-    // Limpiar contenido anterior
     dbCodeElement.innerHTML = '';
     fileCodeElement.innerHTML = '';
+    const existingPackageInfo = document.querySelectorAll('.package-info');
+    existingPackageInfo.forEach(info => info.remove());
     
-    // Comprobar si hay diferencias
     let hasDifferences = differences.some(part => part.added || part.removed);
+    resultSummary.innerHTML = hasDifferences 
+        ? '<span style="vertical-align: middle;">📌 Se encontraron diferencias entre los códigos.</span>'
+        : '<span style="vertical-align: middle;">✅ Los archivos son completamente iguales.</span>';
+    if (!hasDifferences) showNotification('Los archivos son completamente iguales.');
     
-    // Mostrar resumen
-    if (hasDifferences) {
-        resultSummary.innerHTML = '<span style="vertical-align: middle;">📌 Se encontraron diferencias entre los códigos.</span>';
-    } else {
-        resultSummary.innerHTML = '<span style="vertical-align: middle;">✅ Los archivos son completamente iguales.</span>';
-        showNotification('Los archivos son completamente iguales.');
-    }
-    
-    // Añadir información sobre la estructura del package si está disponible
     if (options.specCodePresent || options.bodyCodePresent) {
         let packageInfoText = '';
-        if (options.specCodePresent && options.bodyCodePresent) {
-            packageInfoText = 'El objeto contiene tanto PACKAGE como PACKAGE BODY.';
-        } else if (options.specCodePresent) {
-            packageInfoText = 'El objeto contiene solo PACKAGE (sin BODY).';
-        } else if (options.bodyCodePresent) {
-            packageInfoText = 'El objeto contiene solo PACKAGE BODY (sin especificación).';
-        }
-        
+        if (options.specCodePresent && options.bodyCodePresent) packageInfoText = 'El objeto contiene tanto PACKAGE como PACKAGE BODY.';
+        else if (options.specCodePresent) packageInfoText = 'El objeto contiene solo PACKAGE (sin BODY).';
+        else if (options.bodyCodePresent) packageInfoText = 'El objeto contiene solo PACKAGE BODY (sin especificación).';
         if (packageInfoText) {
             const infoElement = document.createElement('div');
             infoElement.className = 'package-info';
@@ -58,72 +48,47 @@ function displayCodeSideBySide(dbCode, fileCode, differences, options = {}) {
         }
     }
     
-    // Preparar las líneas para cada panel
     let dbLines = [];
     let fileLines = [];
     
-    // Procesar diferencias
     differences.forEach(part => {
-        if (part.added) {
-            // Este código solo está en el archivo
-            // Preservamos exactamente el formato original, incluidos espacios y saltos de línea
-            const lines = part.value.split('\n');
-            lines.forEach((line, index) => {
-                const lineHtml = line.replace(/\s/g, function(match) {
-                    if (match === ' ') return '&nbsp;';
-                    if (match === '\t') return '&nbsp;&nbsp;&nbsp;&nbsp;';
-                    return match;
-                });
-                
-                // Si no es la última línea del part o el part no termina con \n, añadimos nuestro propio \n
-                const needsLineBreak = index < lines.length - 1 || (part.value.endsWith('\n') && index === lines.length - 1);
-                
-                fileLines.push(`<span class="added"><span class="diff-marker">+</span>${lineHtml || '&nbsp;'}</span>${needsLineBreak ? '\n' : ''}`);
-            });
-        } else if (part.removed) {
-            // Este código solo está en la BD
-            // Preservamos exactamente el formato original, incluidos espacios y saltos de línea
-            const lines = part.value.split('\n');
-            lines.forEach((line, index) => {
-                const lineHtml = line.replace(/\s/g, function(match) {
-                    if (match === ' ') return '&nbsp;';
-                    if (match === '\t') return '&nbsp;&nbsp;&nbsp;&nbsp;';
-                    return match;
-                });
-                
-                // Si no es la última línea del part o el part no termina con \n, añadimos nuestro propio \n
-                const needsLineBreak = index < lines.length - 1 || (part.value.endsWith('\n') && index === lines.length - 1);
-                
-                dbLines.push(`<span class="removed"><span class="diff-marker">-</span>${lineHtml || '&nbsp;'}</span>${needsLineBreak ? '\n' : ''}`);
-            });
-        } else {
-            // Código común
-            // Preservamos exactamente el formato original, incluidos espacios y saltos de línea
-            const lines = part.value.split('\n');
-            lines.forEach((line, index) => {
-                const lineHtml = line.replace(/\s/g, function(match) {
-                    if (match === ' ') return '&nbsp;';
-                    if (match === '\t') return '&nbsp;&nbsp;&nbsp;&nbsp;';
-                    return match;
-                });
-                
-                // Si no es la última línea del part o el part no termina con \n, añadimos nuestro propio \n
-                const needsLineBreak = index < lines.length - 1 || (part.value.endsWith('\n') && index === lines.length - 1);
-                
-                // Usar una línea vacía representada como un espacio no rompible en lugar de cadena vacía
-                const displayHtml = lineHtml || '&nbsp;';
-                
-                dbLines.push(`<span class="unchanged">${displayHtml}</span>${needsLineBreak ? '\n' : ''}`);
-                fileLines.push(`<span class="unchanged">${displayHtml}</span>${needsLineBreak ? '\n' : ''}`);
-            });
+        // Manejo especial para saltos de línea solos
+        if (part.value === '\n') {
+            if (part.removed) {
+                // Añadir la línea vacía en db-code
+                dbLines.push('<span class="removed diff-line empty-line"><span class="diff-marker">-</span> </span>');
+                // No añadir nada en file-code para evitar espacio extra
+            } else if (part.added) {
+                // Añadir la línea vacía en file-code
+                fileLines.push('<span class="added diff-line empty-line"><span class="diff-marker">+</span> </span>');
+                // Añadir un spacer en db-code para mantener alineación
+                dbLines.push('<span class="spacer diff-line empty-line"> </span>');
+            }
+            return;
         }
+
+        const lines = part.value.split('\n').filter(line => line !== '');
+        lines.forEach((line, index) => {
+            const lineHtml = line.replace(/\s/g, match => match === ' ' ? ' ' : match === '\t' ? '    ' : match) || ' ';
+            const isLastLine = index === lines.length - 1;
+            const needsLineBreak = !isLastLine || (part.value.endsWith('\n') && !isLastLine);
+
+            if (part.added) {
+                fileLines.push(`<span class="added diff-line"><span class="diff-marker">+</span>${lineHtml}</span>${needsLineBreak ? '\n' : ''}`);
+                if (index === 0) dbLines.push('<span class="spacer diff-line"> </span>');
+            } else if (part.removed) {
+                dbLines.push(`<span class="removed diff-line"><span class="diff-marker">-</span>${lineHtml}</span>${needsLineBreak ? '\n' : ''}`);
+                if (index === 0) fileLines.push('<span class="spacer diff-line"> </span>');
+            } else {
+                dbLines.push(`<span class="unchanged diff-line">${lineHtml}</span>${needsLineBreak ? '\n' : ''}`);
+                fileLines.push(`<span class="unchanged diff-line">${lineHtml}</span>${needsLineBreak ? '\n' : ''}`);
+            }
+        });
     });
     
-    // Mostrar el código en los paneles
-    dbCodeElement.innerHTML = dbLines.join('');
-    fileCodeElement.innerHTML = fileLines.join('');
-    
-    // Sincronizar scroll entre paneles
+    // Asegurar que cada línea esté separada por un salto de línea real
+    dbCodeElement.innerHTML = dbLines.join('\n');
+    fileCodeElement.innerHTML = fileLines.join('\n');
     synchronizeScroll();
 }
 
