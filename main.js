@@ -101,6 +101,16 @@ function normalizeOracleCode(code, objectType, objectName) {
       /PACKAGE\s+(?:\w+\.)?(\w+)/gi,
       `PACKAGE ${objectName}`
     );
+  } else if (objectType === "FUNCTION") {
+    normalizedCode = normalizedCode.replace(
+      /FUNCTION\s+(?:\w+\.)?(\w+)/gi,
+      `FUNCTION ${objectName}`
+    );
+  } else if (objectType === "PROCEDURE") {
+    normalizedCode = normalizedCode.replace(
+      /PROCEDURE\s+(?:\w+\.)?(\w+)/gi,
+      `PROCEDURE ${objectName}`
+    );
   }
 
   // PASO 3: Normalizar encabezados en minúsculas que pudieron escapar
@@ -120,6 +130,20 @@ function normalizeOracleCode(code, objectType, objectName) {
       normalizedCode = normalizedCode.replace(
         /create\s+or\s+replace\s+package\s+(?:\w+\.)?(\w+)/i,
         `PACKAGE ${objectName}`
+      );
+    }
+    // Para function
+    else if (objectType === "FUNCTION") {
+      normalizedCode = normalizedCode.replace(
+        /create\s+or\s+replace\s+function\s+(?:\w+\.)?(\w+)/i,
+        `FUNCTION ${objectName}`
+      );
+    }
+    // Para procedure
+    else if (objectType === "PROCEDURE") {
+      normalizedCode = normalizedCode.replace(
+        /create\s+or\s+replace\s+procedure\s+(?:\w+\.)?(\w+)/i,
+        `PROCEDURE ${objectName}`
       );
     }
   }
@@ -276,6 +300,107 @@ ipcMain.on(
 
         if (result.rows.length > 0) {
           dbCode = result.rows.map((row) => row[0]).join("");
+
+          // Aplicar normalización especial para funciones
+          if (objectType === "FUNCTION") {
+            // Para el código de la BD
+            dbCode = dbCode.toUpperCase();
+
+            // Eliminar "CREATE OR REPLACE" del código de BD si existe
+            dbCode = dbCode.replace(/CREATE\s+OR\s+REPLACE\s+/gi, "");
+
+            // Eliminar cualquier referencia al esquema en el encabezado
+            dbCode = dbCode.replace(
+              new RegExp(`FUNCTION\\s+\\w+\\.${objectName}`, "gi"),
+              `FUNCTION ${objectName}`
+            );
+
+            // Asegurar que el encabezado sea solo "FUNCTION nombreFuncion"
+            if (!dbCode.startsWith("FUNCTION")) {
+              const nameIndex = dbCode.indexOf(objectName.toUpperCase());
+              if (nameIndex > -1) {
+                dbCode =
+                  `FUNCTION ${objectName.toUpperCase()}` +
+                  dbCode.substring(nameIndex + objectName.length);
+              }
+            }
+
+            // Para el archivo local - eliminar "CREATE OR REPLACE" si existe
+            fileContent = fileContent.toUpperCase();
+            fileContent = fileContent.replace(/CREATE\s+OR\s+REPLACE\s+/gi, "");
+
+            // Eliminar cualquier referencia al esquema en el encabezado
+            fileContent = fileContent.replace(
+              new RegExp(`FUNCTION\\s+\\w+\\.${objectName}`, "gi"),
+              `FUNCTION ${objectName}`
+            );
+
+            // Asegurar que el encabezado sea solo "FUNCTION nombreFuncion"
+            if (!fileContent.startsWith("FUNCTION")) {
+              const nameIndex = fileContent.indexOf(objectName.toUpperCase());
+              if (nameIndex > -1) {
+                fileContent =
+                  `FUNCTION ${objectName.toUpperCase()}` +
+                  fileContent.substring(nameIndex + objectName.length);
+              }
+            }
+            // Añadir slash al final del código de BD si no existe
+            dbCode = dbCode + "/\n"; // Añadir slash con saltos de línea
+          }
+
+          // Aplicar normalización especial para procedimientos
+          if (objectType === "PROCEDURE") {
+            // Normalizar el código de la BD (convertir todo a mayúsculas)
+            dbCode = dbCode.toUpperCase();
+
+            // Eliminar "CREATE OR REPLACE" del código de BD si existe
+            dbCode = dbCode.replace(/CREATE\s+OR\s+REPLACE\s+/gi, "");
+
+            // Eliminar comillas alrededor del nombre del procedimiento
+            dbCode = dbCode.replace(
+              new RegExp(`PROCEDURE\\s+"${objectName}"`, "gi"),
+              `PROCEDURE ${objectName}`
+            );
+
+            // Eliminar cualquier referencia al esquema en el encabezado
+            dbCode = dbCode.replace(
+              new RegExp(`PROCEDURE\\s+\\w+\\.${objectName}`, "gi"),
+              `PROCEDURE ${objectName}`
+            );
+            dbCode = dbCode.replace(
+              new RegExp(`PROCEDURE\\s+\\w+\\."${objectName}"`, "gi"),
+              `PROCEDURE ${objectName}`
+            );
+
+            // Asegurar que el encabezado sea solo "PROCEDURE nombreProcedimiento" sin comillas
+            if (!dbCode.startsWith("PROCEDURE")) {
+              // Buscar el nombre del procedimiento con posibles comillas
+              const quotedNameRegex = new RegExp(`"${objectName}"`, "i");
+              const unquotedNameRegex = new RegExp(`\\b${objectName}\\b`, "i");
+
+              let nameIndex = -1;
+              if (dbCode.match(quotedNameRegex)) {
+                nameIndex = dbCode.indexOf(`"${objectName.toUpperCase()}"`);
+                if (nameIndex > -1) {
+                  // Reemplazar con el nombre sin comillas
+                  dbCode =
+                    `PROCEDURE ${objectName.toUpperCase()}` +
+                    dbCode.substring(nameIndex + objectName.length + 2); // +2 por las comillas
+                }
+              } else if (dbCode.match(unquotedNameRegex)) {
+                nameIndex = dbCode.indexOf(objectName.toUpperCase());
+                if (nameIndex > -1) {
+                  dbCode =
+                    `PROCEDURE ${objectName.toUpperCase()}` +
+                    dbCode.substring(nameIndex + objectName.length);
+                }
+              }
+            }
+
+            // Añadir slash al final del código de BD si no existe
+            // Añadir slash al final del código de BD siempre (reemplazando cualquier slash existente)
+            dbCode = dbCode + "\n/\n"; // Añadir slash con saltos de línea
+          }
         }
       }
 
@@ -292,8 +417,75 @@ ipcMain.on(
       const originalFileContent = fileContent;
       const originalDbCode = dbCode;
 
-      // Cuando se normaliza el archivo local, verificar si es package o package body
-      if (fileContainsPackageBody) {
+      // Tratamiento especial para FUNCTION y PROCEDURE
+      if (objectType === "FUNCTION") {
+        // Convertir todo el contenido del archivo a mayúsculas
+        fileContent = fileContent.toUpperCase();
+
+        // Normalizar el encabezado
+        if (fileContent.includes("CREATE OR REPLACE")) {
+          fileContent = fileContent.replace(
+            /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+(?:\w+\.)?(\w+)/i,
+            `CREATE OR REPLACE FUNCTION ${objectName.toUpperCase()}`
+          );
+        } else if (!fileContent.startsWith("FUNCTION")) {
+          // Si no tiene ningún encabezado estándar, asegurar que comience con FUNCTION
+          const nameIndex = fileContent.indexOf(objectName.toUpperCase());
+          if (nameIndex > -1) {
+            fileContent =
+              `FUNCTION ${objectName.toUpperCase()}` +
+              fileContent.substring(nameIndex + objectName.length);
+          }
+        }
+      } else if (objectType === "PROCEDURE") {
+        // Convertir todo el contenido del archivo a mayúsculas
+        fileContent = fileContent.toUpperCase();
+
+        // Eliminar "CREATE OR REPLACE" del código del archivo si existe
+        fileContent = fileContent.replace(/CREATE\s+OR\s+REPLACE\s+/gi, "");
+
+        // Eliminar comillas alrededor del nombre del procedimiento
+        fileContent = fileContent.replace(
+          new RegExp(`PROCEDURE\\s+"${objectName}"`, "gi"),
+          `PROCEDURE ${objectName}`
+        );
+
+        // Eliminar cualquier referencia al esquema en el encabezado
+        fileContent = fileContent.replace(
+          new RegExp(`PROCEDURE\\s+\\w+\\.${objectName}`, "gi"),
+          `PROCEDURE ${objectName}`
+        );
+        fileContent = fileContent.replace(
+          new RegExp(`PROCEDURE\\s+\\w+\\."${objectName}"`, "gi"),
+          `PROCEDURE ${objectName}`
+        );
+
+        // Asegurar que el encabezado sea solo "PROCEDURE nombreProcedimiento" sin comillas
+        if (!fileContent.startsWith("PROCEDURE")) {
+          // Similar a la lógica para dbCode
+          const quotedNameRegex = new RegExp(`"${objectName}"`, "i");
+          const unquotedNameRegex = new RegExp(`\\b${objectName}\\b`, "i");
+
+          let nameIndex = -1;
+          if (fileContent.match(quotedNameRegex)) {
+            nameIndex = fileContent.indexOf(`"${objectName.toUpperCase()}"`);
+            if (nameIndex > -1) {
+              fileContent =
+                `PROCEDURE ${objectName.toUpperCase()}` +
+                fileContent.substring(nameIndex + objectName.length + 2);
+            }
+          } else if (fileContent.match(unquotedNameRegex)) {
+            nameIndex = fileContent.indexOf(objectName.toUpperCase());
+            if (nameIndex > -1) {
+              fileContent =
+                `PROCEDURE ${objectName.toUpperCase()}` +
+                fileContent.substring(nameIndex + objectName.length);
+            }
+          }
+        }
+      }
+      // Cuando se normaliza el archivo local para PACKAGE, verificar si es package o package body
+      else if (fileContainsPackageBody) {
         console.log("Archivo contiene PACKAGE BODY");
         // Si el archivo tiene PACKAGE BODY, normalizar como PACKAGE BODY
         fileContent = fileContent.replace(
@@ -305,7 +497,7 @@ ipcMain.on(
           "PACKAGE BODY",
           objectName
         );
-      } else {
+      } else if (fileContainsPackageSpec) {
         console.log("Archivo contiene PACKAGE");
         // Si el archivo tiene PACKAGE spec, normalizar como PACKAGE
         fileContent = fileContent.replace(
@@ -315,27 +507,35 @@ ipcMain.on(
         fileContent = normalizeOracleCode(fileContent, "PACKAGE", objectName);
       }
 
-      // Normalización adicional para asegurar que se eliminen esquemas y consistencia
-      fileContent = fileContent.replace(
-        /CREATE\s+OR\s+REPLACE\s+PACKAGE\s+(?:\w+\.)?(\w+)/gi,
-        `PACKAGE ${objectName}`
-      );
-      fileContent = fileContent.replace(
-        /CREATE\s+OR\s+REPLACE\s+PACKAGE\s+BODY\s+(?:\w+\.)?(\w+)/gi,
-        `PACKAGE BODY ${objectName}`
-      );
-      fileContent = fileContent.replace(
-        new RegExp(`\\b\\w+\\.${objectName}\\b`, "gi"),
-        objectName
-      );
+      // Normalización adicional para asegurar que se eliminen esquemas y consistencia en PACKAGE
+      if (objectType === "PACKAGE" || objectType === "PACKAGE BODY") {
+        fileContent = fileContent.replace(
+          /CREATE\s+OR\s+REPLACE\s+PACKAGE\s+(?:\w+\.)?(\w+)/gi,
+          `PACKAGE ${objectName}`
+        );
+        fileContent = fileContent.replace(
+          /CREATE\s+OR\s+REPLACE\s+PACKAGE\s+BODY\s+(?:\w+\.)?(\w+)/gi,
+          `PACKAGE BODY ${objectName}`
+        );
+        fileContent = fileContent.replace(
+          new RegExp(`\\b\\w+\\.${objectName}\\b`, "gi"),
+          objectName
+        );
 
-      // Normalizar todas las palabras clave a mayúsculas
-      fileContent = fileContent.replace(/\bcreate\b/gi, "CREATE");
-      fileContent = fileContent.replace(/\bor\b/gi, "OR");
-      fileContent = fileContent.replace(/\breplace\b/gi, "REPLACE");
-      fileContent = fileContent.replace(/\bpackage\b(?!\s+body)/gi, "PACKAGE");
-      fileContent = fileContent.replace(/\bpackage\s+body\b/gi, "PACKAGE BODY");
-      fileContent = fileContent.replace(/\bis\b/gi, "IS");
+        // Normalizar palabras clave a mayúsculas para PACKAGE
+        fileContent = fileContent.replace(/\bcreate\b/gi, "CREATE");
+        fileContent = fileContent.replace(/\bor\b/gi, "OR");
+        fileContent = fileContent.replace(/\breplace\b/gi, "REPLACE");
+        fileContent = fileContent.replace(
+          /\bpackage\b(?!\s+body)/gi,
+          "PACKAGE"
+        );
+        fileContent = fileContent.replace(
+          /\bpackage\s+body\b/gi,
+          "PACKAGE BODY"
+        );
+        fileContent = fileContent.replace(/\bis\b/gi, "IS");
+      }
 
       console.log(
         "Original File Content (primeras 100 chars):",
