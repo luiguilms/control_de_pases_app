@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comparación por Lotes</title>
+    <link rel="stylesheet" href="styles/styles-batch-compare.css">
+</head>
+<body>
+    <div class="header-container">
+        <h2>Comparar Múltiples Archivos</h2>
+        <a href="compare.html" class="batch-button">Comparación Individual</a>
+    </div>
+    
+    <div class="batch-container">
+        <div class="input-group">
+            <label for="folderPath">Ruta de la carpeta:</label>
+            <div class="input-with-button">
+                <input type="text" id="folderPath" placeholder="C:\ruta\a\mi\carpeta">
+                <button id="browseButton">Explorar</button>
+            </div>
+        </div>
+
+        <button id="scanButton" class="primary-button">Escanear Archivos</button>
+        <div id="batchLoader" class="loader"></div>
+    </div>
+
+    <div class="files-container">
+        <h3>Archivos Encontrados</h3>
+        <div class="filter-controls">
+            <div class="search-box">
+                <input type="text" id="searchFiles" placeholder="Buscar archivos...">
+            </div>
+            <div class="file-types">
+                <label><input type="checkbox" class="file-type-filter" value=".pck" checked> Packages (.pck)</label>
+                <label><input type="checkbox" class="file-type-filter" value=".fnc" checked> Functions (.fnc)</label>
+                <label><input type="checkbox" class="file-type-filter" value=".prc" checked> Procedures (.prc)</label>
+            </div>
+        </div>
+        
+        <div class="file-list-container">
+            <table id="fileList" class="file-list">
+                <thead>
+                    <tr>
+                        <th>Nombre del Archivo</th>
+                        <th>Tipo</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Los archivos se agregarán aquí dinámicamente -->
+                </tbody>
+            </table>
+            <div id="emptyMessage" class="empty-message">No se han encontrado archivos. Seleccione una carpeta y haga clic en "Escanear Archivos".</div>
+        </div>
+    </div>
+
+    <!-- Modal para la comparación -->
+    <div id="compareModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Comparando: <span id="fileName"></span></h3>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="modalLoader" class="loader"></div>
+                <div id="modalNotification" class="notification" style="display: none;"></div>
+                <div id="modalResultSummary" class="result-summary"></div>
+                
+                <div class="diff-controls">
+                    <div class="diff-toggle">
+                        <input type="checkbox" id="modalShowOnlyDiff" checked>
+                        <label for="modalShowOnlyDiff">Solo mostrar diferencias</label>
+                    </div>
+                </div>
+                
+                <div class="side-by-side">
+                    <div class="code-panel">
+                        <div class="panel-header">Base de Datos</div>
+                        <pre id="modal-db-code" class="code-content"></pre>
+                    </div>
+                    
+                    <div class="code-panel">
+                        <div class="panel-header">Archivo Local</div>
+                        <pre id="modal-file-code" class="code-content"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="batch-compare.js"></script>
+</body>
+</html>

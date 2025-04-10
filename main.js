@@ -1,8 +1,9 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const oracledb = require("oracledb");
 require("dotenv").config(); // Cargar variables de entorno
 const { diffLines } = require("diff"); // Importamos la librería de comparación
+const fs = require("fs");
 
 let mainWindow;
 let userSession = null; // Guardará la sesión del usuario autenticado
@@ -587,3 +588,103 @@ ipcMain.on(
     }
   }
 );
+
+// Diálogo para seleccionar carpeta
+ipcMain.on('open-folder-dialog', async (event) => {
+    try {
+      const result = await dialog.showOpenDialog({
+        properties: ['openDirectory']
+      });
+      
+      if (!result.canceled && result.filePaths.length > 0) {
+        event.reply('selected-folder', result.filePaths[0]);
+      }
+    } catch (error) {
+      console.error('Error al abrir el diálogo de carpetas:', error);
+    }
+  });
+  
+  // Escanear carpeta para buscar archivos
+  ipcMain.on('scan-folder', async (event, { folderPath, extensions }) => {
+    try {
+      // Comprobar que la ruta existe
+      if (!fs.existsSync(folderPath)) {
+        event.reply('scan-results', []);
+        return;
+      }
+      
+      // Función recursiva para escanear directorios
+      function scanDirectory(dirPath) {
+        let results = [];
+        const items = fs.readdirSync(dirPath);
+        
+        for (const item of items) {
+          const itemPath = path.join(dirPath, item);
+          const stat = fs.statSync(itemPath);
+          
+          if (stat.isDirectory()) {
+            // Recursivamente escanear subdirectorios
+            results = results.concat(scanDirectory(itemPath));
+          } else {
+            // Verificar si la extensión del archivo coincide con alguna de las solicitadas
+            const ext = path.extname(item).toLowerCase();
+            if (extensions.includes(ext)) {
+              results.push(itemPath);
+            }
+          }
+        }
+        
+        return results;
+      }
+      
+      const files = scanDirectory(folderPath);
+      event.reply('scan-results', files);
+      
+    } catch (error) {
+      console.error('Error al escanear la carpeta:', error);
+      event.reply('scan-results', []);
+    }
+  });
+  
+  ipcMain.on('read-file', async (event, filePath) => {
+    try {
+      if (fs.existsSync(filePath)) {
+        // Leer como buffer para tener flexibilidad con la codificación
+        const buffer = fs.readFileSync(filePath);
+        
+        // Intentar varias codificaciones comunes en orden de probabilidad
+        const encodings = ['windows-1252', 'ISO-8859-1', 'latin1', 'utf8'];
+        let fileContent = null;
+        
+        // Detectar codificación probando cada una
+        for (const encoding of encodings) {
+          try {
+            // Intentar decodificar con esta codificación
+            const decodedText = buffer.toString(encoding);
+            
+            // Verificar si hay caracteres extraños que indican codificación incorrecta
+            if (!decodedText.includes('�')) {
+              fileContent = decodedText;
+              console.log(`Archivo leído correctamente con codificación: ${encoding}`);
+              break;
+            }
+          } catch (encodingError) {
+            console.log(`Error con codificación ${encoding}:`, encodingError.message);
+          }
+        }
+        
+        // Si todas las codificaciones fallan, usar windows-1252 como última opción
+        if (!fileContent) {
+          fileContent = buffer.toString('windows-1252');
+          console.log('Usando windows-1252 como fallback');
+        }
+        
+        event.reply('file-content', fileContent);
+      } else {
+        event.reply('file-content', null);
+      }
+    } catch (error) {
+      console.error('Error al leer el archivo:', error);
+      event.reply('file-content', null);
+    }
+  });

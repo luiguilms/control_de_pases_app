@@ -1,0 +1,447 @@
+/* styles-batch-compare.css - Estilos para la página de comparación por lotes */
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f5f7fa;
+    margin: 0;
+    padding: 0;
+    color: #333;
+}
+
+.header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background-color: #fff;
+    border-bottom: 1px solid #e1e4e8;
+}
+
+h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: #2c3e50;
+}
+
+h3 {
+    margin: 0.5rem 0;
+    font-size: 1.2rem;
+    color: #2c3e50;
+}
+
+.batch-button {
+    display: inline-block;
+    background-color: #3498db;
+    color: white;
+    text-decoration: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.batch-button:hover {
+    background-color: #2980b9;
+}
+
+.batch-container {
+    background-color: white;
+    margin: 1.5rem;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem;
+}
+
+.input-group {
+    flex: 1;
+    min-width: 300px;
+}
+
+label {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+    color: #566573;
+}
+
+input, select {
+    width: 100%;
+    padding: 0.6rem;
+    border: 1px solid #dce4ec;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+input:focus, select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.input-with-button {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.input-with-button input {
+    flex: 1;
+}
+
+button {
+    background-color: #e9ecef;
+    color: #495057;
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+button:hover {
+    background-color: #dee2e6;
+}
+
+.primary-button {
+    background-color: #3498db;
+    color: white;
+}
+
+.primary-button:hover {
+    background-color: #2980b9;
+}
+
+/* Contenedor de archivos */
+.files-container {
+    background-color: white;
+    margin: 1.5rem;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.filter-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #eaecef;
+}
+
+.search-box {
+    flex: 1;
+    max-width: 300px;
+}
+
+.file-types {
+    display: flex;
+    gap: 1rem;
+}
+
+.file-types label {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-bottom: 0;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.file-types input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    cursor: pointer;
+}
+
+.file-list-container {
+    position: relative;
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid #eaecef;
+    border-radius: 4px;
+}
+
+.file-list {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.file-list th, .file-list td {
+    padding: 0.8rem;
+    text-align: left;
+    border-bottom: 1px solid #eaecef;
+}
+
+.file-list th {
+    background-color: #f1f2f6;
+    color: #2c3e50;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.file-list tbody tr:hover {
+    background-color: #f7fafc;
+}
+
+.file-list td:last-child {
+    text-align: center;
+}
+
+.compare-button {
+    background-color: #2ecc71;
+    color: white;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+}
+
+.compare-button:hover {
+    background-color: #27ae60;
+}
+
+.empty-message {
+    padding: 2rem;
+    text-align: center;
+    color: #7f8c8d;
+    font-style: italic;
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background-color: #fff;
+    margin: 2% auto;
+    width: 90%;
+    height: 90%;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    animation: modalFadeIn 0.3s;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid #eaecef;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.close-modal {
+    color: #aaa;
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-modal:hover {
+    color: #555;
+}
+
+.modal-body {
+    padding: 1rem;
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Contenedor de resultados dentro del modal */
+.side-by-side {
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    flex: 1;
+    overflow: hidden;
+}
+
+.code-panel {
+    flex: 1;
+    border: 1px solid #eaecef;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.panel-header {
+    background-color: #f1f2f6;
+    color: #2c3e50;
+    padding: 0.8rem;
+    font-weight: 600;
+    border-bottom: 1px solid #eaecef;
+    border-radius: 4px 4px 0 0;
+}
+
+.code-content {
+    background-color: #f8f9fa;
+    padding: 0.5rem;
+    overflow-x: auto;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    white-space: pre;
+    flex: 1;
+    overflow-y: auto;
+    tab-size: 4;
+}
+
+/* Estilos para las diferencias */
+.added {
+    color: #27ae60;
+    background-color: #e8f5e9;
+    display: block;
+    padding: 2px 0;
+}
+
+.removed {
+    color: #e74c3c;
+    background-color: #ffebee;
+    display: block;
+    padding: 2px 0;
+}
+
+.unchanged {
+    color: #2c3e50;
+    background-color: transparent;
+    display: block;
+    padding: 2px 0;
+}
+
+.diff-marker {
+    display: inline-block;
+    width: 20px;
+    text-align: center;
+    margin-right: 5px;
+    font-weight: bold;
+}
+
+.spacer {
+    height: 1.4em;
+}
+
+/* Loader para operaciones asíncronas */
+.loader {
+    display: none;
+    margin: 1rem auto;
+    border: 5px solid #f3f3f3;
+    border-radius: 50%;
+    border-top: 5px solid #3498db;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Mensajes de notificación */
+.notification {
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* Control de diferencias */
+.diff-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.diff-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: #566573;
+}
+
+.diff-toggle input {
+    margin: 0;
+    width: auto;
+}
+
+.result-summary {
+    color: #566573;
+    font-size: 0.9rem;
+    padding: 0.5rem 0;
+    margin-bottom: 0.5rem;
+}
+
+/* Responsive design */
+@media (max-width: 1100px) {
+    .form-group {
+        width: 100%;
+    }
+    
+    .filter-controls {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .search-box {
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .side-by-side {
+        flex-direction: column;
+    }
+    
+    .code-panel {
+        flex: none;
+        width: 100%;
+        margin-bottom: 1rem;
+    }
+}
