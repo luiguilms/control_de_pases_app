@@ -178,7 +178,9 @@ function normalizeOracleCode(code, objectType, objectName) {
 
 ipcMain.on(
   "compare-code",
-  async (event, { fileContent, schema, objectType, objectName, filePath }) => {
+  async (event, { fileContent, schema, objectType, objectName, filePath, fileMetadata }) => {
+    console.log('Recibido en main.js - filePath:', filePath);
+    console.log('Tipo de dato de filePath:', typeof filePath);
     if (!userSession) {
       event.reply("compare-response", "Error: No hay usuario autenticado.");
       return;
@@ -220,19 +222,30 @@ ipcMain.on(
       } catch (dateError) {
         console.log("Error al obtener fechas del objeto:", dateError);
       }
+      console.log('Intentando obtener fechas para el archivo en ruta:', filePath);
 
-      // Obtener fechas del archivo local si se proporcionó la ruta
-      let fileDates = { created: null, modified: null };
-      if (filePath) {
-        try {
-          const stats = fs.statSync(filePath);
-          fileDates.created = stats.birthtime;
-          fileDates.modified = stats.mtime;
-          console.log('fileDates calculado:', fileDates); // Depurar aquí
-        } catch (fileError) {
-          console.log("Error al obtener fechas del archivo:", fileError);
-        }
+      // Obtener fechas del archivo
+    let fileDates = { created: null, modified: null };
+    
+    // Si tenemos la metadata del archivo (para comparación individual)
+    if (fileMetadata) {
+      // Usamos lastModified para ambas fechas ya que el objeto File solo proporciona esa fecha
+      fileDates.modified = new Date(fileMetadata.lastModified);
+      fileDates.created = new Date(fileMetadata.lastModified); // Misma fecha como fallback
+      console.log('fileDates calculado desde metadata:', fileDates);
+    } 
+    // Si tenemos la ruta del archivo (para comparación por lotes)
+    else if (filePath) {
+      try {
+        const stats = fs.statSync(filePath);
+        fileDates.created = stats.birthtime;
+        fileDates.modified = stats.mtime;
+        console.log('fileDates calculado desde ruta de archivo:', fileDates);
+      } catch (fileError) {
+        console.log("Error al obtener fechas del archivo:", fileError);
       }
+    }
+      
 
       // Para PACKAGE, obtener tanto spec como body
       if (objectType === "PACKAGE") {
@@ -607,6 +620,10 @@ ipcMain.on(
       const hasDifferences = differences.some(
         (part) => part.added || part.removed
       );
+      console.log('Enviando respuesta con fechas:', {
+        objectDates: objectDates,
+        fileDates: fileDates
+      });
 
       // Preparar respuesta
       const response = JSON.stringify({

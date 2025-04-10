@@ -281,18 +281,20 @@ document.getElementById('fileInput').addEventListener('change', function(event) 
 
 // Enviar solicitud de comparación
 document.getElementById('compareButton').addEventListener('click', () => {
-    const fileInput = document.getElementById('fileInput').files[0];
+    const fileInput = document.getElementById('fileInput');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showNotification("Debes seleccionar un archivo para comparar.", true);
+        return;
+    }
+    
     const schema = document.getElementById('schemaInput').value.trim();
     const objectType = document.getElementById('objectType').value;
     const objectName = document.getElementById('objectInput').value.trim();
 
     if (!schema || !objectName) {
         showNotification("Debes ingresar el esquema y el nombre del objeto.", true);
-        return;
-    }
-
-    if (!fileInput) {
-        showNotification("Debes seleccionar un archivo para comparar.", true);
         return;
     }
 
@@ -314,7 +316,14 @@ document.getElementById('compareButton').addEventListener('click', () => {
         
         // Auto-detección de esquema desde el contenido como respaldo
         const detectedSchema = extractSchemaFromContent(fileContent, objectType);
-        const filePath = fileInput.value; // Esto debería funcionar en Electron
+        
+        // Crear objeto de metadatos del archivo
+        const fileMetadata = {
+            name: file.name,
+            lastModified: file.lastModified, // Timestamp de última modificación
+            size: file.size
+        };
+        
         // Usar el esquema detectado si no coincide con el ingresado manualmente y mostrar notificación
         if (detectedSchema && detectedSchema !== schema) {
             showNotification(`Se detectó un esquema diferente en el archivo (${detectedSchema}). Usando el esquema detectado.`, false);
@@ -324,7 +333,7 @@ document.getElementById('compareButton').addEventListener('click', () => {
                 schema: detectedSchema,
                 objectType,
                 objectName,
-                filePath
+                fileMetadata // Enviar metadata en lugar de filePath
             });
         } else {
             // Usar el esquema ingresado por el usuario
@@ -333,7 +342,7 @@ document.getElementById('compareButton').addEventListener('click', () => {
                 schema,
                 objectType,
                 objectName,
-                filePath
+                fileMetadata // Enviar metadata en lugar de filePath
             });
         }
     };
@@ -341,7 +350,7 @@ document.getElementById('compareButton').addEventListener('click', () => {
         toggleLoader(false);
         showNotification("Error al leer el archivo.", true);
     };
-    reader.readAsText(fileInput, 'ISO-8859-1'); // También puedes probar con 'windows-1252'
+    reader.readAsText(file, 'ISO-8859-1');
 });
 
 // Mostrar resultado de la comparación
@@ -361,6 +370,13 @@ ipcRenderer.on('compare-response', (event, response) => {
         
         try {
             const parsedResponse = JSON.parse(response);
+            console.log('Respuesta recibida del proceso principal:', parsedResponse);
+            // Loguear específicamente la información de fechas
+            if (parsedResponse.fileDates) {
+                console.log('Fechas del archivo recibidas:', parsedResponse.fileDates);
+            } else {
+                console.log('No se recibieron fechas del archivo');
+            }
             dbCode = parsedResponse.dbCode;
             fileContent = parsedResponse.fileContent;
             differences = parsedResponse.differences;
