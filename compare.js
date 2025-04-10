@@ -18,6 +18,101 @@ function showNotification(message, isError = false) {
     }, 5000);
 }
 
+// Función para extraer esquema del contenido del archivo
+function extractSchemaFromContent(fileContent, objectType) {
+    // Normalizar el contenido para facilitar la búsqueda
+    const content = fileContent.toString().toUpperCase();
+    
+    // Patrones a buscar según el tipo de objeto
+    let patterns = [
+        new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+(\\w+)\\.`, 'i'),
+        new RegExp(`CREATE\\s+${objectType}\\s+(\\w+)\\.`, 'i')
+    ];
+    
+    // También para casos de PACKAGE BODY
+    if (objectType === 'PACKAGE') {
+        patterns.push(new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.', 'i'));
+        patterns.push(new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.', 'i'));
+    }
+    
+    // Probar cada patrón
+    for (const pattern of patterns) {
+        const match = content.match(pattern);
+        if (match && match[1]) {
+            return match[1];
+        }
+    }
+    
+    return null;
+}
+
+// Función para analizar el nombre del objeto a partir del contenido
+function extractObjectNameFromContent(fileContent, objectType) {
+    // Normalizar el contenido para facilitar la búsqueda
+    const content = fileContent.toString().toUpperCase();
+    
+    // Patrones a buscar según el tipo de objeto
+    let patterns = [
+        new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+\\w+\\.(\\w+)`, 'i'),
+        new RegExp(`CREATE\\s+${objectType}\\s+\\w+\\.(\\w+)`, 'i')
+    ];
+    
+    // También para casos de PACKAGE BODY
+    if (objectType === 'PACKAGE') {
+        patterns.push(new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+\\w+\\.(\\w+)', 'i'));
+        patterns.push(new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+\\w+\\.(\\w+)', 'i'));
+    }
+    
+    // Probar cada patrón
+    for (const pattern of patterns) {
+        const match = content.match(pattern);
+        if (match && match[1]) {
+            return match[1];
+        }
+    }
+    
+    return null;
+}
+
+// Verificar y completar los campos según el contenido del archivo
+function autoFillFromFileContent(fileContent) {
+    // Intentar determinar el tipo de objeto desde el contenido
+    let detectedType = null;
+    
+    if (fileContent.toUpperCase().includes('PACKAGE BODY')) {
+        detectedType = 'PACKAGE';
+    } else if (fileContent.toUpperCase().includes('PACKAGE') && !fileContent.toUpperCase().includes('PACKAGE BODY')) {
+        detectedType = 'PACKAGE';
+    } else if (fileContent.toUpperCase().includes('FUNCTION')) {
+        detectedType = 'FUNCTION';
+    } else if (fileContent.toUpperCase().includes('PROCEDURE')) {
+        detectedType = 'PROCEDURE';
+    }
+    
+    // Si se detectó un tipo, actualizar el select
+    if (detectedType) {
+        const objectTypeSelect = document.getElementById('objectType');
+        for (let i = 0; i < objectTypeSelect.options.length; i++) {
+            if (objectTypeSelect.options[i].value === detectedType) {
+                objectTypeSelect.selectedIndex = i;
+                break;
+            }
+        }
+    }
+    
+    // Intentar extraer el esquema
+    const schema = extractSchemaFromContent(fileContent, detectedType || document.getElementById('objectType').value);
+    if (schema) {
+        document.getElementById('schemaInput').value = schema;
+    }
+    
+    // Intentar extraer el nombre del objeto
+    const objectName = extractObjectNameFromContent(fileContent, detectedType || document.getElementById('objectType').value);
+    if (objectName) {
+        document.getElementById('objectInput').value = objectName;
+    }
+}
+
 // Función para mostrar el código en los paneles
 function displayCodeSideBySide(dbCode, fileCode, differences, options = {}) {
     const dbCodeElement = document.getElementById('db-code');
@@ -56,29 +151,29 @@ function displayCodeSideBySide(dbCode, fileCode, differences, options = {}) {
         if (part.value === '\n') {
             if (part.removed) {
                 // Añadir la línea vacía en db-code
-                dbLines.push('<span class="removed diff-line empty-line"><span class="diff-marker">-</span> </span>');
+                dbLines.push('<span class="removed diff-line empty-line"><span class="diff-marker">-</span> </span>');
                 // No añadir nada en file-code para evitar espacio extra
             } else if (part.added) {
                 // Añadir la línea vacía en file-code
-                fileLines.push('<span class="added diff-line empty-line"><span class="diff-marker">+</span> </span>');
+                fileLines.push('<span class="added diff-line empty-line"><span class="diff-marker">+</span> </span>');
                 // Añadir un spacer en db-code para mantener alineación
-                dbLines.push('<span class="spacer diff-line empty-line"> </span>');
+                dbLines.push('<span class="spacer diff-line empty-line"> </span>');
             }
             return;
         }
 
         const lines = part.value.split('\n').filter(line => line !== '');
         lines.forEach((line, index) => {
-            const lineHtml = line.replace(/\s/g, match => match === ' ' ? ' ' : match === '\t' ? '    ' : match) || ' ';
+            const lineHtml = line.replace(/\s/g, match => match === ' ' ? ' ' : match === '\t' ? '    ' : match) || ' ';
             const isLastLine = index === lines.length - 1;
             const needsLineBreak = !isLastLine || (part.value.endsWith('\n') && !isLastLine);
 
             if (part.added) {
                 fileLines.push(`<span class="added diff-line"><span class="diff-marker">+</span>${lineHtml}</span>${needsLineBreak ? '\n' : ''}`);
-                if (index === 0) dbLines.push('<span class="spacer diff-line"> </span>');
+                if (index === 0) dbLines.push('<span class="spacer diff-line"> </span>');
             } else if (part.removed) {
                 dbLines.push(`<span class="removed diff-line"><span class="diff-marker">-</span>${lineHtml}</span>${needsLineBreak ? '\n' : ''}`);
-                if (index === 0) fileLines.push('<span class="spacer diff-line"> </span>');
+                if (index === 0) fileLines.push('<span class="spacer diff-line"> </span>');
             } else {
                 dbLines.push(`<span class="unchanged diff-line">${lineHtml}</span>${needsLineBreak ? '\n' : ''}`);
                 fileLines.push(`<span class="unchanged diff-line">${lineHtml}</span>${needsLineBreak ? '\n' : ''}`);
@@ -108,6 +203,22 @@ function synchronizeScroll() {
     });
 }
 
+// Auto-detección de esquema y nombre al seleccionar un archivo
+document.getElementById('fileInput').addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const fileContent = e.target.result;
+        autoFillFromFileContent(fileContent);
+    };
+    reader.onerror = function() {
+        showNotification("Error al leer el archivo.", true);
+    };
+    reader.readAsText(file, 'ISO-8859-1');
+});
+
 // Enviar solicitud de comparación
 document.getElementById('compareButton').addEventListener('click', () => {
     const fileInput = document.getElementById('fileInput').files[0];
@@ -135,12 +246,30 @@ document.getElementById('compareButton').addEventListener('click', () => {
     
     const reader = new FileReader();
     reader.onload = function (event) {
-        ipcRenderer.send('compare-code', {
-            fileContent: event.target.result,
-            schema,
-            objectType,
-            objectName
-        });
+        const fileContent = event.target.result;
+        
+        // Auto-detección de esquema desde el contenido como respaldo
+        const detectedSchema = extractSchemaFromContent(fileContent, objectType);
+        
+        // Usar el esquema detectado si no coincide con el ingresado manualmente y mostrar notificación
+        if (detectedSchema && detectedSchema !== schema) {
+            showNotification(`Se detectó un esquema diferente en el archivo (${detectedSchema}). Usando el esquema detectado.`, false);
+            
+            ipcRenderer.send('compare-code', {
+                fileContent,
+                schema: detectedSchema,
+                objectType,
+                objectName
+            });
+        } else {
+            // Usar el esquema ingresado por el usuario
+            ipcRenderer.send('compare-code', {
+                fileContent,
+                schema,
+                objectType,
+                objectName
+            });
+        }
     };
     reader.onerror = function() {
         toggleLoader(false);
