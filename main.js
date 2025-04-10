@@ -399,7 +399,6 @@ ipcMain.on(
             }
 
             // Añadir slash al final del código de BD si no existe
-            // Añadir slash al final del código de BD siempre (reemplazando cualquier slash existente)
             dbCode = dbCode + "\n/\n"; // Añadir slash con saltos de línea
           }
         }

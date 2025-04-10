@@ -5,7 +5,6 @@ const path = require('path');
 const folderPathInput = document.getElementById('folderPath');
 const browseButton = document.getElementById('browseButton');
 const scanButton = document.getElementById('scanButton');
-const schemaInput = document.getElementById('schemaInput');
 const fileListContainer = document.getElementById('fileList').querySelector('tbody');
 const emptyMessage = document.getElementById('emptyMessage');
 const searchInput = document.getElementById('searchFiles');
@@ -230,7 +229,6 @@ function filterFiles() {
     displayFiles(filteredFiles);
 }
 
-// Función para comparar código al hacer clic en el botón
 // Función para comparar código al hacer clic en el botón
 async function handleCompareClick(event) {
     console.log("Botón Comparar clickeado");
