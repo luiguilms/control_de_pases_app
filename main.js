@@ -178,7 +178,7 @@ function normalizeOracleCode(code, objectType, objectName) {
 
 ipcMain.on(
   "compare-code",
-  async (event, { fileContent, schema, objectType, objectName }) => {
+  async (event, { fileContent, schema, objectType, objectName, filePath }) => {
     if (!userSession) {
       event.reply("compare-response", "Error: No hay usuario autenticado.");
       return;
@@ -190,10 +190,49 @@ ipcMain.on(
       let dbCode = "";
       let specCode = "";
       let bodyCode = "";
+      let objectDates = { created: null, lastModified: null }; // Inicializar aquí
       let fileContainsPackageBody = fileContent.match(/\bpackage\s+body\b/i);
       let fileContainsPackageSpec = fileContent.match(
         /\bpackage\b(?!\s+body)/i
       );
+
+      // Obtener fechas de creación/modificación del objeto en la base de datos
+      try {
+        const dateResult = await connection.execute(
+          `SELECT 
+            CREATED, 
+            LAST_DDL_TIME 
+          FROM ALL_OBJECTS 
+          WHERE OWNER = :schema 
+          AND OBJECT_NAME = :objectName 
+          AND OBJECT_TYPE = :objectType`,
+          { 
+            schema, 
+            objectName, 
+            objectType: objectType === 'PACKAGE BODY' ? 'PACKAGE BODY' : objectType 
+          }
+        );
+
+        if (dateResult.rows && dateResult.rows.length > 0) {
+          objectDates.created = dateResult.rows[0][0];
+          objectDates.lastModified = dateResult.rows[0][1];
+        }
+      } catch (dateError) {
+        console.log("Error al obtener fechas del objeto:", dateError);
+      }
+
+      // Obtener fechas del archivo local si se proporcionó la ruta
+      let fileDates = { created: null, modified: null };
+      if (filePath) {
+        try {
+          const stats = fs.statSync(filePath);
+          fileDates.created = stats.birthtime;
+          fileDates.modified = stats.mtime;
+          console.log('fileDates calculado:', fileDates); // Depurar aquí
+        } catch (fileError) {
+          console.log("Error al obtener fechas del archivo:", fileError);
+        }
+      }
 
       // Para PACKAGE, obtener tanto spec como body
       if (objectType === "PACKAGE") {
@@ -577,6 +616,8 @@ ipcMain.on(
         hasDifferences,
         specCodePresent: !!specCode,
         bodyCodePresent: !!bodyCode,
+        objectDates,
+        fileDates
       });
 
       event.reply("compare-response", response);

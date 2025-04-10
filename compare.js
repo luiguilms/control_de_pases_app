@@ -1,5 +1,25 @@
 const { ipcRenderer } = require('electron');
 
+// Función para formatear fechas
+function formatDate(dateObj) {
+    if (!dateObj) return 'N/A';
+    
+    const date = new Date(dateObj);
+    
+    // Verificar si es una fecha válida
+    if (isNaN(date.getTime())) return 'N/A';
+    
+    // Formatear como DD/MM/YYYY HH:MM:SS
+    return new Intl.DateTimeFormat('es', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    }).format(date);
+}
+
 // Mostrar/ocultar el indicador de carga
 function toggleLoader(show) {
     document.getElementById('loader').style.display = show ? 'block' : 'none';
@@ -16,6 +36,42 @@ function showNotification(message, isError = false) {
     setTimeout(() => {
         notification.style.display = 'none';
     }, 5000);
+}
+
+// Función para mostrar las fechas en la interfaz
+function displayDates(objectDates, fileDates) {
+    const dateInfoContainer = document.getElementById('date-info');
+    if (!dateInfoContainer) return;
+    
+    const dbCreated = formatDate(objectDates?.created);
+    const dbModified = formatDate(objectDates?.lastModified);
+    const fileCreated = formatDate(fileDates?.created);
+    const fileModified = formatDate(fileDates?.modified);
+    
+    dateInfoContainer.innerHTML = `
+        <div class="date-column">
+            <h4>Base de Datos</h4>
+            <div class="date-item">
+                <span class="date-label">Creado:</span>
+                <span class="date-value">${dbCreated}</span>
+            </div>
+            <div class="date-item">
+                <span class="date-label">Modificado:</span>
+                <span class="date-value">${dbModified}</span>
+            </div>
+        </div>
+        <div class="date-column">
+            <h4>Archivo Local</h4>
+            <div class="date-item">
+                <span class="date-label">Creado:</span>
+                <span class="date-value">${fileCreated}</span>
+            </div>
+            <div class="date-item">
+                <span class="date-label">Modificado:</span>
+                <span class="date-value">${fileModified}</span>
+            </div>
+        </div>
+    `;
 }
 
 // Función para extraer esquema del contenido del archivo
@@ -129,6 +185,10 @@ function displayCodeSideBySide(dbCode, fileCode, differences, options = {}) {
         ? '<span style="vertical-align: middle;">📌 Se encontraron diferencias entre los códigos.</span>'
         : '<span style="vertical-align: middle;">✅ Los archivos son completamente iguales.</span>';
     if (!hasDifferences) showNotification('Los archivos son completamente iguales.');
+
+    if (options.objectDates || options.fileDates) {
+        displayDates(options.objectDates, options.fileDates);
+    }
     
     if (options.specCodePresent || options.bodyCodePresent) {
         let packageInfoText = '';
@@ -243,6 +303,10 @@ document.getElementById('compareButton').addEventListener('click', () => {
     document.getElementById('db-code').innerHTML = '';
     document.getElementById('file-code').innerHTML = '';
     document.getElementById('result-summary').textContent = '';
+
+    // También limpiar la información de fechas si existe
+    const dateInfo = document.getElementById('date-info');
+    if (dateInfo) dateInfo.innerHTML = '';
     
     const reader = new FileReader();
     reader.onload = function (event) {
@@ -250,7 +314,7 @@ document.getElementById('compareButton').addEventListener('click', () => {
         
         // Auto-detección de esquema desde el contenido como respaldo
         const detectedSchema = extractSchemaFromContent(fileContent, objectType);
-        
+        const filePath = fileInput.value; // Esto debería funcionar en Electron
         // Usar el esquema detectado si no coincide con el ingresado manualmente y mostrar notificación
         if (detectedSchema && detectedSchema !== schema) {
             showNotification(`Se detectó un esquema diferente en el archivo (${detectedSchema}). Usando el esquema detectado.`, false);
@@ -259,7 +323,8 @@ document.getElementById('compareButton').addEventListener('click', () => {
                 fileContent,
                 schema: detectedSchema,
                 objectType,
-                objectName
+                objectName,
+                filePath
             });
         } else {
             // Usar el esquema ingresado por el usuario
@@ -267,7 +332,8 @@ document.getElementById('compareButton').addEventListener('click', () => {
                 fileContent,
                 schema,
                 objectType,
-                objectName
+                objectName,
+                filePath
             });
         }
     };
@@ -305,6 +371,13 @@ ipcRenderer.on('compare-response', (event, response) => {
             }
             if ('bodyCodePresent' in parsedResponse) {
                 options.bodyCodePresent = parsedResponse.bodyCodePresent;
+            }
+            // Extraer información de fechas
+            if ('objectDates' in parsedResponse) {
+                options.objectDates = parsedResponse.objectDates;
+            }
+            if ('fileDates' in parsedResponse) {
+                options.fileDates = parsedResponse.fileDates;
             }
         } catch (e) {
             // Si no se puede parsear como JSON, asumimos que es la respuesta anterior
