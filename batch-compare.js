@@ -129,6 +129,45 @@ function extractSchemaFromContent(fileContent, objectType) {
   return null;
 }
 
+// Esta función mejorada extrae tanto el esquema como el nombre del objeto
+function extractObjectInfoFromContent(fileContent, objectType) {
+  // Normalizar el contenido para facilitar la búsqueda
+  const content = fileContent.toString().toUpperCase();
+  
+  // Patrones a buscar según el tipo de objeto
+  // Capturamos dos grupos: (esquema).(nombre_objeto)
+  let patterns = [
+    new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+(\\w+)\\."?([\\w_]+)"?`, 'i'),
+    new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+(\\w+)\\.(\\w+)`, 'i'),
+    new RegExp(`CREATE\\s+${objectType}\\s+(\\w+)\\."?([\\w_]+)"?`, 'i'),
+    new RegExp(`CREATE\\s+${objectType}\\s+(\\w+)\\.(\\w+)`, 'i')
+  ];
+  
+  // También para casos de PACKAGE BODY
+  if (objectType === 'PACKAGE') {
+    patterns.push(new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\."?([\\w_]+)"?', 'i'));
+    patterns.push(new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.(\\w+)', 'i'));
+    patterns.push(new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\."?([\\w_]+)"?', 'i'));
+    patterns.push(new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.(\\w+)', 'i'));
+  }
+  
+  // Probar cada patrón
+  for (const pattern of patterns) {
+    const match = content.match(pattern);
+    if (match && match[1] && match[2]) {
+      return {
+        schema: match[1],
+        objectName: match[2]
+      };
+    }
+  }
+  
+  return {
+    schema: null,
+    objectName: null
+  };
+}
+
 function extractSchemaAndName(fileName) {
   // Eliminar la extensión
   const baseName = path.basename(fileName, path.extname(fileName));
@@ -372,50 +411,42 @@ async function handleCompareClick(event) {
 
 // Modificar la función que recibe el contenido del archivo
 ipcRenderer.on("file-content", (event, fileContent) => {
-  console.log(
-    "Evento file-content recibido",
-    fileContent ? "con contenido" : "sin contenido"
-  );
-
   if (!fileContent) {
     toggleLoader("modalLoader", false);
     showModalNotification("Error al leer el archivo o archivo vacío", true);
     return;
   }
 
-  const button =
-    document.querySelector(".compare-button:focus") || document.activeElement;
-
+  const button = document.querySelector(".compare-button:focus") || document.activeElement;
   if (!button || !button.classList.contains("compare-button")) {
     console.log("No se encontró un botón de comparación activo");
     return;
   }
 
   const objectType = button.dataset.objectType;
-  const objectName = button.dataset.objectName;
-
-  // Intentar extraer el esquema del contenido del archivo
-  const schema = extractSchemaFromContent(fileContent, objectType);
-
-  if (!schema) {
+  
+  // Extraer tanto el esquema como el nombre del objeto del contenido
+  const objectInfo = extractObjectInfoFromContent(fileContent, objectType);
+  
+  if (!objectInfo.schema || !objectInfo.objectName) {
     toggleLoader("modalLoader", false);
     showModalNotification(
-      `No se pudo detectar el esquema en el contenido del archivo. Verifica que el archivo contiene una declaración válida con formato: CREATE OR REPLACE ${objectType} ESQUEMA.NOMBRE`,
+      `No se pudo detectar el esquema y/o nombre del objeto en el contenido del archivo. Verifica que el archivo contiene una declaración válida con formato: CREATE OR REPLACE ${objectType} ESQUEMA.NOMBRE`,
       true
     );
     return;
   }
-
-  console.log(`Esquema extraído del contenido: ${schema}`);
-  console.log(`Enviando comparación: ${schema}.${objectName} [${objectType}]`);
-  const filePath = button.dataset.filepath; // Obtén la ruta del dataset del botón
-
-  // Enviar datos para comparación
+  
+  console.log(`Información extraída del contenido: Esquema=${objectInfo.schema}, Nombre=${objectInfo.objectName}`);
+  
+  const filePath = button.dataset.filepath;
+  
+  // Enviar datos para comparación con los valores extraídos del contenido
   ipcRenderer.send("compare-code", {
     fileContent,
-    schema,
+    schema: objectInfo.schema,
     objectType,
-    objectName,
+    objectName: objectInfo.objectName,
     filePath
   });
 });

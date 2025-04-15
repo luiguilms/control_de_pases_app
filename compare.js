@@ -81,13 +81,19 @@ function extractSchemaFromContent(fileContent, objectType) {
     
     // Patrones a buscar según el tipo de objeto
     let patterns = [
+        // Con comillas
+        new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+(\\w+)\\."`, 'i'),
+        // Sin comillas
         new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+(\\w+)\\.`, 'i'),
+        new RegExp(`CREATE\\s+${objectType}\\s+(\\w+)\\."`, 'i'),
         new RegExp(`CREATE\\s+${objectType}\\s+(\\w+)\\.`, 'i')
     ];
     
     // También para casos de PACKAGE BODY
     if (objectType === 'PACKAGE') {
+        patterns.push(new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\."', 'i'));
         patterns.push(new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.', 'i'));
+        patterns.push(new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\."', 'i'));
         patterns.push(new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.', 'i'));
     }
     
@@ -109,13 +115,19 @@ function extractObjectNameFromContent(fileContent, objectType) {
     
     // Patrones a buscar según el tipo de objeto
     let patterns = [
+        // Con comillas: CREATE OR REPLACE PROCEDURE SCHEMA."OBJECT_NAME"
+        new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+\\w+\\."([\\w_]+)"`, 'i'),
+        // Sin comillas: CREATE OR REPLACE PROCEDURE SCHEMA.OBJECT_NAME
         new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+\\w+\\.(\\w+)`, 'i'),
+        new RegExp(`CREATE\\s+${objectType}\\s+\\w+\\."([\\w_]+)"`, 'i'),
         new RegExp(`CREATE\\s+${objectType}\\s+\\w+\\.(\\w+)`, 'i')
     ];
     
     // También para casos de PACKAGE BODY
     if (objectType === 'PACKAGE') {
+        patterns.push(new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+\\w+\\."([\\w_]+)"', 'i'));
         patterns.push(new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+\\w+\\.(\\w+)', 'i'));
+        patterns.push(new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+\\w+\\."([\\w_]+)"', 'i'));
         patterns.push(new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+\\w+\\.(\\w+)', 'i'));
     }
     
