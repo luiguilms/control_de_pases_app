@@ -20,14 +20,11 @@ document.addEventListener('DOMContentLoaded', () => {
         connectionSelect.appendChild(option);
       }
     } else {
-      // Si no hay conexiones de TNS, agregar las opciones predeterminadas
-      const defaultConnections = ['DESA1', 'DESA2', 'DESA3', 'DESA4', 'ARQUI'];
-      defaultConnections.forEach(conn => {
+        // Si no hay conexiones, mostrar un mensaje
         const option = document.createElement('option');
-        option.value = conn;
-        option.textContent = conn;
+        option.value = '';
+        option.textContent = 'No se encontraron conexiones TNS';
         connectionSelect.appendChild(option);
-      });
     }
   });
 
