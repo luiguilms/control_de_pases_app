@@ -1,5 +1,36 @@
 const { ipcRenderer } = require('electron');
 
+// Cuando se cargue el DOM, solicitar las conexiones
+document.addEventListener('DOMContentLoaded', () => {
+    // Solicitar la lista de conexiones
+    ipcRenderer.send('get-tns-connections');
+  });
+  
+  // Recibir la lista de conexiones y actualizar el selector
+  ipcRenderer.on('tns-connections', (event, connections) => {
+    const connectionSelect = document.getElementById('connectionSelect');
+    connectionSelect.innerHTML = ''; // Limpiar opciones existentes
+    
+    if (Object.keys(connections).length > 0) {
+      // Agregar cada conexión como una opción
+      for (const alias of Object.keys(connections).sort()) { // Ordenar alfabéticamente
+        const option = document.createElement('option');
+        option.value = alias;
+        option.textContent = alias;
+        connectionSelect.appendChild(option);
+      }
+    } else {
+      // Si no hay conexiones de TNS, agregar las opciones predeterminadas
+      const defaultConnections = ['DESA1', 'DESA2', 'DESA3', 'DESA4', 'ARQUI'];
+      defaultConnections.forEach(conn => {
+        const option = document.createElement('option');
+        option.value = conn;
+        option.textContent = conn;
+        connectionSelect.appendChild(option);
+      });
+    }
+  });
+
 document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     

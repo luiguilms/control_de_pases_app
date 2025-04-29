@@ -7,8 +7,81 @@ const fs = require("fs");
 
 let mainWindow;
 let userSession = null; // Guardará la sesión del usuario autenticado
+// Función para encontrar el archivo tnsnames.ora en Windows
+function findTnsnamesFile() {
+  // Posibles ubicaciones en Windows
+  const possibleLocations = [];
+  
+  // Usando variables de entorno de Oracle
+  if (process.env.ORACLE_HOME) {
+    possibleLocations.push(path.join(process.env.ORACLE_HOME, 'network', 'admin', 'tnsnames.ora'));
+  }
+  if (process.env.TNS_ADMIN) {
+    possibleLocations.push(path.join(process.env.TNS_ADMIN, 'tnsnames.ora'));
+  }
+  
+  // Ubicaciones comunes de Oracle en Windows
+  possibleLocations.push(path.join('C:', 'Oracle', 'product', 'client', 'network', 'admin', 'tnsnames.ora'));
+  possibleLocations.push(path.join('C:', 'Program Files', 'Oracle', 'client', 'network', 'admin', 'tnsnames.ora'));
+  possibleLocations.push(path.join('C:', 'app', 'client', 'network', 'admin', 'tnsnames.ora'));
+  possibleLocations.push(path.join('C:', 'instantclient_19_10', 'network', 'admin', 'tnsnames.ora'));
+  
+  // También buscar en el directorio de la aplicación
+  possibleLocations.push(path.join(app.getAppPath(), 'tnsnames.ora'));
+  
+  // Verificar cada ubicación
+  for (const location of possibleLocations) {
+    if (fs.existsSync(location)) {
+      console.log(`Archivo tnsnames.ora encontrado en: ${location}`);
+      return location;
+    }
+  }
+  
+  console.log('No se encontró el archivo tnsnames.ora');
+  return null; // No se encontró el archivo
+}
+
+// Función para analizar el archivo tnsnames.ora
+function parseTnsnames(filePath) {
+  if (!filePath) return {};
+  
+  try {
+    // Leer el archivo con codificación Windows
+    const content = fs.readFileSync(filePath, { encoding: 'utf8' });
+    const connections = {};
+    
+    // Expresión regular para encontrar nombres de conexión
+    // Busca líneas que empiecen con un nombre válido seguido de un signo =
+    const aliasPattern = /^\s*([\w\d\.\-]+)\s*=/gm;
+    let match;
+    
+    while ((match = aliasPattern.exec(content)) !== null) {
+      const alias = match[1].trim();
+      // Evitar capturar palabras clave o comentarios
+      if (!alias.startsWith('#') && !alias.includes(' ')) {
+        connections[alias] = alias;
+      }
+    }
+    
+    console.log(`Conexiones encontradas: ${Object.keys(connections).join(', ')}`);
+    return connections;
+  } catch (error) {
+    console.error('Error al leer tnsnames.ora:', error);
+    return {};
+  }
+}
+
+// Variable global para almacenar las conexiones de TNS
+let tnsConnections = {};
 
 app.whenReady().then(() => {
+
+  // Buscar y cargar el archivo tnsnames.ora
+  const tnsnamesPath = findTnsnamesFile();
+  if (tnsnamesPath) {
+    tnsConnections = parseTnsnames(tnsnamesPath);
+  }
+
   mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
@@ -24,21 +97,34 @@ app.whenReady().then(() => {
   mainWindow.loadFile("index.html");
 });
 
+// Agregar evento para enviar las conexiones al frontend
+ipcMain.on('get-tns-connections', (event) => {
+  event.reply('tns-connections', tnsConnections);
+});
+
 ipcMain.on("login-attempt", async (event, credentials) => {
   try {
-    // Obtener la cadena de conexión desde .env
-    const connectionString = process.env[credentials.selectedConnection];
+    const selectedTns = credentials.selectedConnection;
 
-    if (!connectionString) {
-      event.reply("login-response", "Error: Conexión no válida.");
-      return;
+
+    let connectionString;
+    if (tnsConnections[selectedTns]) {
+      // Usar el alias TNS directamente
+      connectionString = selectedTns;
+    } else {
+      // Usar la configuración del .env como fallback
+      connectionString = process.env[selectedTns];
+      if (!connectionString) {
+        event.reply("login-response", "Error: Conexión no válida.");
+        return;
+      }
     }
 
     // Intentar la conexión con la cadena obtenida
     const connection = await oracledb.getConnection({
       user: credentials.username,
       password: credentials.password,
-      connectionString: connectionString,
+      connectionString: connectionString ,
     });
 
     // Guardar la sesión del usuario autenticado
