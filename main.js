@@ -107,6 +107,15 @@ ipcMain.on('get-tns-connections', (event) => {
 ipcMain.on("login-attempt", async (event, credentials) => {
   try {
     const selectedTns = credentials.selectedConnection;
+    // Buscar el archivo tnsnames.ora primero
+    const tnsnamesPath = findTnsnamesFile();
+    if (tnsnamesPath) {
+      // Configurar la variable de entorno TNS_ADMIN con la ruta donde se encontró el archivo
+      process.env.TNS_ADMIN = path.dirname(tnsnamesPath);
+      console.log(`TNS_ADMIN configurado a: ${process.env.TNS_ADMIN}`);
+    } else {
+      console.log('No se encontró tnsnames.ora, la conexión podría fallar');
+    }
 
 
     let connectionString;
