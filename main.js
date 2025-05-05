@@ -25,6 +25,8 @@ function findTnsnamesFile() {
   possibleLocations.push(path.join('C:', 'Program Files', 'Oracle', 'client', 'network', 'admin', 'tnsnames.ora'));
   possibleLocations.push(path.join('C:', 'app', 'client', 'network', 'admin', 'tnsnames.ora'));
   possibleLocations.push(path.join('C:', 'instantclient_19_10', 'network', 'admin', 'tnsnames.ora'));
+
+  possibleLocations.push(path.join('C:', 'app', 'client', 'kcabrerac', 'product', '19.0.0', 'client_1', 'network', 'admin', 'tnsnames.ora'));
   
   // También buscar en el directorio de la aplicación
   possibleLocations.push(path.join(app.getAppPath(), 'tnsnames.ora'));
