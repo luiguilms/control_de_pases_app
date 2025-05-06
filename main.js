@@ -151,7 +151,39 @@ ipcMain.on("login-attempt", async (event, credentials) => {
     event.reply("login-response", `Error: ${error.message}`);
   }
 });
+ipcMain.handle("fetch-owner-from-db", async (event, objectName, objectType) => {
+  console.log('[fetch-owner-from-db] Buscando owner de:', objectName, 'tipo:', objectType);
+  if (!userSession) {
+    console.log('[fetch-owner-from-db] No hay sesión activa');
+    return null;
+  }
+  try {
+    const connection = await oracledb.getConnection({
+      user: userSession.user,
+      password: userSession.password,
+      connectionString: userSession.connectionString,
+    });
 
+    const result = await connection.execute(
+      `SELECT OWNER FROM DBA_OBJECTS WHERE OBJECT_NAME = :objectName AND OBJECT_TYPE = :objectType`,
+      { objectName: objectName.toUpperCase(), objectType: objectType.toUpperCase() },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+
+    await connection.close();
+
+    if (result.rows.length > 0) {
+      console.log('[fetch-owner-from-db] Owner encontrado:', result.rows[0].OWNER);
+      return result.rows[0].OWNER;
+    } else {
+      console.log('[fetch-owner-from-db] No se encontró el objeto en DBA_OBJECTS');
+      return null;
+    }
+  } catch (err) {
+    console.error('[fetch-owner-from-db] Error:', err);
+    return null;
+  }
+});
 function normalizeOracleCode(code, objectType, objectName) {
   // Clonar el código original
   let normalizedCode = code;

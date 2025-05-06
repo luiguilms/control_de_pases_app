@@ -120,7 +120,9 @@ function extractObjectNameFromContent(fileContent, objectType) {
         // Sin comillas: CREATE OR REPLACE PROCEDURE SCHEMA.OBJECT_NAME
         new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+\\w+\\.(\\w+)`, 'i'),
         new RegExp(`CREATE\\s+${objectType}\\s+\\w+\\."([\\w_]+)"`, 'i'),
-        new RegExp(`CREATE\\s+${objectType}\\s+\\w+\\.(\\w+)`, 'i')
+        new RegExp(`CREATE\\s+${objectType}\\s+\\w+\\.(\\w+)`, 'i'),
+        new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+([\\w_]+)`, 'i'),
+        new RegExp(`CREATE\\s+${objectType}\\s+([\\w_]+)`, 'i'),
     ];
     
     // También para casos de PACKAGE BODY
@@ -143,7 +145,7 @@ function extractObjectNameFromContent(fileContent, objectType) {
 }
 
 // Verificar y completar los campos según el contenido del archivo
-function autoFillFromFileContent(fileContent) {
+async function autoFillFromFileContent(fileContent) {
     // Intentar determinar el tipo de objeto desde el contenido
     let detectedType = null;
     
@@ -168,17 +170,25 @@ function autoFillFromFileContent(fileContent) {
         }
     }
     
-    // Intentar extraer el esquema
+    const objectName = extractObjectNameFromContent(fileContent, detectedType || document.getElementById('objectType').value);
+  if (objectName) {
+    document.getElementById('objectInput').value = objectName;
+
+    // Intentar obtener el esquema desde DBA_OBJECTS si no está en el archivo
     const schema = extractSchemaFromContent(fileContent, detectedType || document.getElementById('objectType').value);
     if (schema) {
-        document.getElementById('schemaInput').value = schema;
+      console.log('[autoFill] Esquema encontrado en archivo:', schema);
+      document.getElementById('schemaInput').value = schema;
+    } else {
+      // Solicita al backend buscar el OWNER
+      console.log('[autoFill] No se encontró esquema en el archivo. Buscando en DB...');
+      const owner = await ipcRenderer.invoke("fetch-owner-from-db", objectName, detectedType || document.getElementById('objectType').value);
+      console.log('[autoFill] Owner obtenido desde DB:', owner);
+      if (owner) {
+        document.getElementById('schemaInput').value = owner;
+      }
     }
-    
-    // Intentar extraer el nombre del objeto
-    const objectName = extractObjectNameFromContent(fileContent, detectedType || document.getElementById('objectType').value);
-    if (objectName) {
-        document.getElementById('objectInput').value = objectName;
-    }
+  }
 }
 
 // Función para mostrar el código en los paneles
@@ -301,9 +311,9 @@ document.getElementById('compareButton').addEventListener('click', () => {
         return;
     }
     
-    const schema = document.getElementById('schemaInput').value.trim();
+    const schema = document.getElementById('schemaInput').value.trim().toUpperCase();
     const objectType = document.getElementById('objectType').value;
-    const objectName = document.getElementById('objectInput').value.trim();
+    const objectName = document.getElementById('objectInput').value.trim().toUpperCase();
 
     if (!schema || !objectName) {
         showNotification("Debes ingresar el esquema y el nombre del objeto.", true);

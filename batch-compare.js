@@ -99,35 +99,6 @@ function getFileDates(filePath) {
   }
 }
 
-// Función para extraer esquema del contenido del archivo
-function extractSchemaFromContent(fileContent, objectType) {
-  // Normalizar el contenido para facilitar la búsqueda
-  const content = fileContent.toString().toUpperCase();
-
-  // Patrones a buscar según el tipo de objeto
-  let patterns = [
-    new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+(\\w+)\\.`, "i"),
-    new RegExp(`CREATE\\s+${objectType}\\s+(\\w+)\\.`, "i"),
-  ];
-
-  // También para casos de PACKAGE BODY
-  if (objectType === "PACKAGE") {
-    patterns.push(
-      new RegExp("CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.", "i")
-    );
-    patterns.push(new RegExp("CREATE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.", "i"));
-  }
-
-  // Probar cada patrón
-  for (const pattern of patterns) {
-    const match = content.match(pattern);
-    if (match && match[1]) {
-      return match[1];
-    }
-  }
-
-  return null;
-}
 
 // Esta función mejorada extrae tanto el esquema como el nombre del objeto
 function extractObjectInfoFromContent(fileContent, objectType) {
@@ -140,7 +111,10 @@ function extractObjectInfoFromContent(fileContent, objectType) {
     new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+(\\w+)\\."?([\\w_]+)"?`, 'i'),
     new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+(\\w+)\\.(\\w+)`, 'i'),
     new RegExp(`CREATE\\s+${objectType}\\s+(\\w+)\\."?([\\w_]+)"?`, 'i'),
-    new RegExp(`CREATE\\s+${objectType}\\s+(\\w+)\\.(\\w+)`, 'i')
+    new RegExp(`CREATE\\s+${objectType}\\s+(\\w+)\\.(\\w+)`, 'i'),
+    new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+([\\w_]+)`, 'i'),
+    new RegExp(`CREATE\\s+${objectType}\\s+([\\w_]+)`, 'i'),
+    new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+([\\w$#]+)`, 'i')
   ];
   
   // También para casos de PACKAGE BODY
@@ -149,24 +123,25 @@ function extractObjectInfoFromContent(fileContent, objectType) {
     patterns.push(new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.(\\w+)', 'i'));
     patterns.push(new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\."?([\\w_]+)"?', 'i'));
     patterns.push(new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.(\\w+)', 'i'));
+    patterns.push(new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+([\\w$#]+)', 'i'));
   }
-  
+  console.log(`[extract] Buscando en contenido para tipo: ${objectType}`);
+  console.log("[extract] Contenido parcial:", content.slice(0, 300)); // primeros 300 caracteres
   // Probar cada patrón
   for (const pattern of patterns) {
     const match = content.match(pattern);
-    if (match && match[1] && match[2]) {
-      return {
-        schema: match[1],
-        objectName: match[2]
-      };
-    }
-  }
-  
-  return {
-    schema: null,
-    objectName: null
-  };
-}
+    if (match) {
+      if (match[2]) {
+        return {
+          schema: match[1],
+          objectName: match[2]
+        };
+      } else if (match[1]) {
+        return {
+          schema: null,
+          objectName: match[1]
+        };
+      }}}}
 
 function extractSchemaAndName(fileName) {
   // Eliminar la extensión
@@ -410,7 +385,7 @@ async function handleCompareClick(event) {
 }
 
 // Modificar la función que recibe el contenido del archivo
-ipcRenderer.on("file-content", (event, fileContent) => {
+ipcRenderer.on("file-content", async (event, fileContent) => {
   if (!fileContent) {
     toggleLoader("modalLoader", false);
     showModalNotification("Error al leer el archivo o archivo vacío", true);
@@ -424,29 +399,48 @@ ipcRenderer.on("file-content", (event, fileContent) => {
   }
 
   const objectType = button.dataset.objectType;
-  
-  // Extraer tanto el esquema como el nombre del objeto del contenido
-  const objectInfo = extractObjectInfoFromContent(fileContent, objectType);
-  
-  if (!objectInfo.schema || !objectInfo.objectName) {
+  const filePath = button.dataset.filepath;
+
+  // Extraer del contenido
+  let { schema, objectName } = extractObjectInfoFromContent(fileContent, objectType);
+
+  if (!objectName) {
     toggleLoader("modalLoader", false);
     showModalNotification(
-      `No se pudo detectar el esquema y/o nombre del objeto en el contenido del archivo. Verifica que el archivo contiene una declaración válida con formato: CREATE OR REPLACE ${objectType} ESQUEMA.NOMBRE`,
+      `No se pudo detectar el nombre del objeto en el contenido del archivo. Verifica que el archivo contiene una declaración válida con formato: CREATE OR REPLACE ${objectType} [ESQUEMA.]NOMBRE`,
       true
     );
     return;
   }
-  
-  console.log(`Información extraída del contenido: Esquema=${objectInfo.schema}, Nombre=${objectInfo.objectName}`);
-  
-  const filePath = button.dataset.filepath;
-  
-  // Enviar datos para comparación con los valores extraídos del contenido
+
+  // Si no se detectó el esquema, intentar obtenerlo desde la base de datos
+  if (!schema) {
+    console.log("[batch-compare] Esquema no detectado en archivo. Buscando en DB...");
+    try {
+      const owner = await ipcRenderer.invoke("fetch-owner-from-db", objectName, objectType);
+      if (owner) {
+        console.log(`[batch-compare] Owner encontrado: ${owner}`);
+        schema = owner;
+      } else {
+        console.warn(`[batch-compare] No se encontró el objeto ${objectName} en la DB.`);
+        toggleLoader("modalLoader", false);
+        showModalNotification(`No se encontró el esquema del objeto '${objectName}' en la base de datos.`, true);
+        return;
+      }
+    } catch (err) {
+      toggleLoader("modalLoader", false);
+      showModalNotification(`Error al consultar el esquema desde la base de datos: ${err.message}`, true);
+      return;
+    }
+  }
+
+  // Continuar con la comparación si todo está bien
+  console.log(`Información final: Esquema=${schema}, Nombre=${objectName}`);
   ipcRenderer.send("compare-code", {
     fileContent,
-    schema: objectInfo.schema,
+    schema,
     objectType,
-    objectName: objectInfo.objectName,
+    objectName,
     filePath
   });
 });
