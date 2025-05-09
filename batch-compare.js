@@ -181,7 +181,7 @@ function showModalNotification(message, isError = false) {
   // Ocultar la notificación después de 5 segundos
   setTimeout(() => {
     modalNotification.style.display = "none";
-  }, 5000);
+  }, 7000);
 }
 
 // Función para explorar carpetas
@@ -423,8 +423,9 @@ ipcRenderer.on("file-content", async (event, fileContent) => {
         schema = owner;
       } else {
         console.warn(`[batch-compare] No se encontró el objeto ${objectName} en la DB.`);
+        const currentDatabase = await ipcRenderer.invoke("get-database-name")
         toggleLoader("modalLoader", false);
-        showModalNotification(`No se encontró el esquema del objeto '${objectName}' en la base de datos.`, true);
+        showModalNotification(`No se encontró el esquema del objeto '${objectName}' en la base de datos '${currentDatabase}'. Revisar su existencia.`, true);
         return;
       }
     } catch (err) {

@@ -35,7 +35,7 @@ function showNotification(message, isError = false) {
     // Ocultar la notificación después de 5 segundos
     setTimeout(() => {
         notification.style.display = 'none';
-    }, 5000);
+    }, 7000);
 }
 
 // Función para mostrar las fechas en la interfaz
@@ -186,11 +186,31 @@ async function autoFillFromFileContent(fileContent) {
       console.log('[autoFill] Owner obtenido desde DB:', owner);
       if (owner) {
         document.getElementById('schemaInput').value = owner;
-      }
+      }else {
+                // Si no se encuentra el esquema ni en el archivo ni en la base de datos, mostramos un mensaje
+                const currentDatabase = await ipcRenderer.invoke("get-database-name");
+                showModalNotification(
+                    `El objeto '${objectName}' no existe en la base de datos '${currentDatabase}'.`,
+                    true
+                );
+                
+                // Limpiar el campo de esquema si no se encuentra
+                document.getElementById('schemaInput').value = "";
+        }
     }
   }
 }
+const modalNotification = document.getElementById('modalNotification');
+function showModalNotification(message, isError = false) {
+  modalNotification.textContent = message;
+  modalNotification.className = `notification ${isError ? "error" : "success"}`;
+  modalNotification.style.display = "block";
 
+  // Ocultar la notificación después de 5 segundos
+  setTimeout(() => {
+    modalNotification.style.display = "none";
+  }, 7000);
+}
 // Función para mostrar el código en los paneles
 function displayCodeSideBySide(dbCode, fileCode, differences, options = {}) {
     const dbCodeElement = document.getElementById('db-code');

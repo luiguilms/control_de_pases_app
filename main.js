@@ -874,3 +874,28 @@ ipcMain.on('open-folder-dialog', async (event) => {
       event.reply('file-content', null);
     }
   });
+ipcMain.handle("get-database-name", async () => {
+  if (!userSession) {
+    console.log("[get-database-name] No hay sesión activa");
+    return "Desconocida"; // Si no hay sesión activa, devolvemos un valor por defecto
+  }
+  
+  try {
+    const connection = await oracledb.getConnection(userSession);
+    
+    // Ejecutamos una consulta para obtener el nombre de la base de datos
+    const result = await connection.execute(
+      `SELECT name FROM v$database`
+    );
+    
+    // Cerrar la conexión
+    await connection.close();
+    
+    // Devolver el nombre de la base de datos
+    return result.rows[0][0]; // Suponiendo que la consulta devuelve el nombre de la base de datos en la primera columna
+    
+  } catch (error) {
+    console.error("[get-database-name] Error al obtener el nombre de la base de datos:", error);
+    return "Desconocida"; // Si ocurre un error, devolvemos un valor por defecto
+  }
+});
