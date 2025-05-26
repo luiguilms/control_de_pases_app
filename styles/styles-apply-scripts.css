@@ -1,0 +1,95 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+}
+.header-container {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+.header-container h2 {
+  margin-right: auto;
+}
+.batch-button {
+  background-color: #007acc;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 14px;
+}
+.batch-button:hover {
+  background-color: #005fa3;
+}
+.apply-container {
+  max-width: 700px;
+  margin: 0 auto;
+}
+.input-group {
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+label {
+  width: 140px;
+  font-weight: bold;
+}
+input[type="text"] {
+  flex-grow: 1;
+  padding: 6px 8px;
+  font-size: 14px;
+}
+button.primary-button {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+button.primary-button:disabled {
+  background-color: #94d3a2;
+  cursor: not-allowed;
+}
+button.primary-button:hover:not(:disabled) {
+  background-color: #218838;
+}
+#applyLoader {
+  margin-top: 15px;
+  text-align: center;
+  font-size: 14px;
+  color: #555;
+  display: none;
+}
+#resultContainer {
+  margin-top: 30px;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+  font-size: 14px;
+  line-height: 1.4;
+}
+#resultContainer ul {
+  list-style-type: disc;
+  padding-left: 20px;
+}
+#resultContainer li {
+  margin-bottom: 8px;
+}
+#resultContainer em {
+  color: red;
+}
+#fileList {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  padding: 10px;
+}
+#fileList div {
+  margin-bottom: 6px;
+}

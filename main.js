@@ -899,3 +899,190 @@ ipcMain.handle("get-database-name", async () => {
     return "Desconocida"; // Si ocurre un error, devolvemos un valor por defecto
   }
 });
+async function readClobAsString(clob) {
+  return new Promise((resolve, reject) => {
+    if (clob === null) {
+      resolve(null);
+      return;
+    }
+
+    let clobData = '';
+
+    clob.setEncoding('utf8');
+    clob.on('data', chunk => {
+      clobData += chunk;
+    });
+    clob.on('end', () => {
+      resolve(clobData);
+    });
+    clob.on('error', err => {
+      reject(err);
+    });
+  });
+}
+function insertSlashesInPackageDDL(ddl, objectName) {
+  // Busca el final de la spec: línea que contiene "END <objectName>;"
+  // La función es case insensitive
+  const regexEndSpec = new RegExp(`(END\\s+${objectName}\\s*;)`, 'i');
+
+  const match = ddl.match(regexEndSpec);
+  if (!match) {
+    // No encontró el final de la spec, solo agrega slash al final
+    return ddl.trim() + '\n/\n';
+  }
+
+  // Índice donde termina la spec
+  const endIndex = match.index + match[0].length;
+
+  // Divide el ddl en spec y resto (body)
+  const specPart = ddl.slice(0, endIndex).trim();
+  const restPart = ddl.slice(endIndex).trim();
+
+  // Asegura que cada parte termina con /
+  const specWithSlash = specPart.endsWith('/') ? specPart : specPart + '\n/';
+  const restWithSlash = restPart.length === 0
+    ? ''
+    : (restPart.endsWith('/') ? restPart : restPart + '\n/');
+
+  // Concatenar y devolver
+  return specWithSlash + '\n\n' + restWithSlash;
+}
+async function backupObjectCode(connection, schema, objectName, backupDir, objectType) {
+  try {
+    const schemaU = schema ? schema.toUpperCase() : (connection.user ? connection.user.toUpperCase() : null);
+    const objectNameU = objectName.toUpperCase();
+
+    if (!schemaU) throw new Error('No se pudo determinar el esquema para el backup');
+
+    let ddlObjectType = objectType.toUpperCase();
+    if (ddlObjectType === 'PACKAGE BODY') ddlObjectType = 'PACKAGE_BODY';
+
+    const result = await connection.execute(
+      `SELECT DBMS_METADATA.GET_DDL(:obj_type, :obj_name, :owner) AS DDL FROM DUAL`,
+      { obj_type: ddlObjectType, obj_name: objectNameU, owner: schemaU },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+
+    if (!result.rows.length || !result.rows[0].DDL) {
+      return null;
+    }
+
+    const clob = result.rows[0].DDL;
+    const ddl = await readClobAsString(clob);
+
+    if (!ddl) {
+      throw new Error('No se pudo leer el DDL completo como texto.');
+    }
+
+    const ddlWithSlashes = insertSlashesInPackageDDL(ddl, objectNameU);
+
+
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+
+    const now = new Date();
+    const fechaHora = now.toISOString().replace(/T/, '_').replace(/:/g, '').split('.')[0];
+
+    const safeSchema = schemaU.replace(/[^a-zA-Z0-9]/g, '_');
+    const safeName = objectNameU.replace(/[^a-zA-Z0-9]/g, '_');
+
+    let extension = '.sql';
+    const objType = objectType ? objectType.toUpperCase() : '';
+
+    if (objType.includes('PACKAGE BODY') || objType === 'PACKAGE') {
+      extension = '.pck';
+    } else if (objType === 'FUNCTION') {
+      extension = '.fnc';
+    } else if (objType === 'PROCEDURE') {
+      extension = '.prc';
+    }
+
+    // Mueve esta línea antes de usar backupPath
+    const fileName = `${safeSchema}_${safeName}_${fechaHora}${extension}`;
+    const backupPath = path.join(backupDir, fileName);
+
+    // Ahora sí puedes usar backupPath
+    fs.writeFileSync(backupPath, ddlWithSlashes, 'utf8');
+
+    return backupPath;
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function applyScript(connection, scriptContent) {
+  // Dividir el contenido en bloques separados por líneas con solo "/"
+  const blocks = scriptContent
+    .split(/\r?\n/)
+    .reduce((acc, line) => {
+      if (line.trim() === '/') {
+        acc.push('');
+      } else {
+        if (acc.length === 0) acc.push('');
+        acc[acc.length - 1] += line + '\n';
+      }
+      return acc;
+    }, [])
+    .filter(block => block.trim() !== '');
+
+  try {
+    for (const block of blocks) {
+      await connection.execute(block);
+    }
+    await connection.commit();
+    return true;
+  } catch (err) {
+    return err;
+  }
+}
+ipcMain.on('apply-scripts', async (event, data) => {
+  const { scripts, backupPath } = data;
+
+  if (!userSession) {
+    event.reply('apply-scripts-response', { success: false, message: 'No hay sesión activa.' });
+    return;
+  }
+
+  if (!backupPath) {
+    event.reply('apply-scripts-response', { success: false, message: 'No se recibió ruta para backup.' });
+    return;
+  }
+
+  let connection;
+  const results = [];
+
+  try {
+    connection = await oracledb.getConnection(userSession);
+
+    for (const script of scripts) {
+      const { schema, objectName, objectType, content } = script;
+
+      try {
+        const backupFile = await backupObjectCode(connection, schema, objectName, backupPath, objectType);
+
+        if (!backupFile) {
+          results.push({ objectName, status: 'No existe objeto para backup. Continuando con aplicación.' });
+        } else {
+          results.push({ objectName, status: `Backup creado en: ${backupFile}` });
+        }
+
+        const execResult = await applyScript(connection, content);
+
+        if (execResult === true) {
+          results.push({ objectName, status: 'Aplicado con éxito' });
+        } else {
+          results.push({ objectName, status: 'Error al aplicar', error: execResult.message });
+        }
+      } catch (error) {
+        results.push({ objectName, status: 'Error inesperado', error: error.message });
+      }
+    }
+
+    await connection.close();
+    event.reply('apply-scripts-response', { success: true, results });
+  } catch (err) {
+    if (connection) try { await connection.close(); } catch {}
+    event.reply('apply-scripts-response', { success: false, message: 'Error al conectar o ejecutar: ' + err.message });
+  }
+});

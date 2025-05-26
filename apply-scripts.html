@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aplicar Scripts por Ruta</title>
+  <link rel="stylesheet" href="styles/styles-apply-scripts.css" />
+</head>
+<body>
+  <div class="header-container">
+    <h2>Aplicar Scripts por Ruta</h2>
+    <a href="compare.html" class="batch-button">Volver a Comparar Código</a>
+    <a href="batch-compare.html" class="batch-button">Comparación por Lotes</a>
+  </div>
+
+  <div class="apply-container">
+    <div class="input-group">
+      <label for="folderPath">Ruta de la carpeta:</label>
+      <input type="text" id="folderPath" placeholder="Ejemplo: C:\ruta\a\scripts" />
+      <button id="browseButton" class="batch-button" type="button">Explorar</button>
+    </div>
+
+    <div id="fileList"></div>
+
+    <button id="startApplyButton" class="primary-button" type="button" disabled>Aplicar Scripts Seleccionados</button>
+
+    <div id="applyLoader">Procesando... Por favor espera.</div>
+  </div>
+
+  <div id="resultContainer"></div>
+
+  <script src="apply-scripts.js"></script>
+</body>
+</html>
