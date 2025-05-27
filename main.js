@@ -11,26 +11,65 @@ let userSession = null; // Guardará la sesión del usuario autenticado
 function findTnsnamesFile() {
   // Posibles ubicaciones en Windows
   const possibleLocations = [];
-  
+
   // Usando variables de entorno de Oracle
   if (process.env.ORACLE_HOME) {
-    possibleLocations.push(path.join(process.env.ORACLE_HOME, 'network', 'admin', 'tnsnames.ora'));
+    possibleLocations.push(
+      path.join(process.env.ORACLE_HOME, "network", "admin", "tnsnames.ora")
+    );
   }
   if (process.env.TNS_ADMIN) {
-    possibleLocations.push(path.join(process.env.TNS_ADMIN, 'tnsnames.ora'));
+    possibleLocations.push(path.join(process.env.TNS_ADMIN, "tnsnames.ora"));
   }
-  
-  // Ubicaciones comunes de Oracle en Windows
-  possibleLocations.push(path.join('C:', 'Oracle', 'product', 'client', 'network', 'admin', 'tnsnames.ora'));
-  possibleLocations.push(path.join('C:', 'Program Files', 'Oracle', 'client', 'network', 'admin', 'tnsnames.ora'));
-  possibleLocations.push(path.join('C:', 'app', 'client', 'network', 'admin', 'tnsnames.ora'));
-  possibleLocations.push(path.join('C:', 'instantclient_19_10', 'network', 'admin', 'tnsnames.ora'));
 
-  possibleLocations.push(path.join('C:', 'app', 'client', 'kcabrerac', 'product', '19.0.0', 'client_1', 'network', 'admin', 'tnsnames.ora'));
-  
+  // Ubicaciones comunes de Oracle en Windows
+  possibleLocations.push(
+    path.join(
+      "C:",
+      "Oracle",
+      "product",
+      "client",
+      "network",
+      "admin",
+      "tnsnames.ora"
+    )
+  );
+  possibleLocations.push(
+    path.join(
+      "C:",
+      "Program Files",
+      "Oracle",
+      "client",
+      "network",
+      "admin",
+      "tnsnames.ora"
+    )
+  );
+  possibleLocations.push(
+    path.join("C:", "app", "client", "network", "admin", "tnsnames.ora")
+  );
+  possibleLocations.push(
+    path.join("C:", "instantclient_19_10", "network", "admin", "tnsnames.ora")
+  );
+
+  possibleLocations.push(
+    path.join(
+      "C:",
+      "app",
+      "client",
+      "kcabrerac",
+      "product",
+      "19.0.0",
+      "client_1",
+      "network",
+      "admin",
+      "tnsnames.ora"
+    )
+  );
+
   // También buscar en el directorio de la aplicación
-  possibleLocations.push(path.join(app.getAppPath(), 'tnsnames.ora'));
-  
+  possibleLocations.push(path.join(app.getAppPath(), "tnsnames.ora"));
+
   // Verificar cada ubicación
   for (const location of possibleLocations) {
     if (fs.existsSync(location)) {
@@ -38,37 +77,39 @@ function findTnsnamesFile() {
       return location;
     }
   }
-  
-  console.log('No se encontró el archivo tnsnames.ora');
+
+  console.log("No se encontró el archivo tnsnames.ora");
   return null; // No se encontró el archivo
 }
 
 // Función para analizar el archivo tnsnames.ora
 function parseTnsnames(filePath) {
   if (!filePath) return {};
-  
+
   try {
     // Leer el archivo con codificación Windows
-    const content = fs.readFileSync(filePath, { encoding: 'utf8' });
+    const content = fs.readFileSync(filePath, { encoding: "utf8" });
     const connections = {};
-    
+
     // Expresión regular para encontrar nombres de conexión
     // Busca líneas que empiecen con un nombre válido seguido de un signo =
     const aliasPattern = /^\s*([\w\d\.\-]+)\s*=/gm;
     let match;
-    
+
     while ((match = aliasPattern.exec(content)) !== null) {
       const alias = match[1].trim();
       // Evitar capturar palabras clave o comentarios
-      if (!alias.startsWith('#') && !alias.includes(' ')) {
+      if (!alias.startsWith("#") && !alias.includes(" ")) {
         connections[alias] = alias;
       }
     }
-    
-    console.log(`Conexiones encontradas: ${Object.keys(connections).join(', ')}`);
+
+    console.log(
+      `Conexiones encontradas: ${Object.keys(connections).join(", ")}`
+    );
     return connections;
   } catch (error) {
-    console.error('Error al leer tnsnames.ora:', error);
+    console.error("Error al leer tnsnames.ora:", error);
     return {};
   }
 }
@@ -77,7 +118,6 @@ function parseTnsnames(filePath) {
 let tnsConnections = {};
 
 app.whenReady().then(() => {
-
   // Buscar y cargar el archivo tnsnames.ora
   const tnsnamesPath = findTnsnamesFile();
   if (tnsnamesPath) {
@@ -100,8 +140,8 @@ app.whenReady().then(() => {
 });
 
 // Agregar evento para enviar las conexiones al frontend
-ipcMain.on('get-tns-connections', (event) => {
-  event.reply('tns-connections', tnsConnections);
+ipcMain.on("get-tns-connections", (event) => {
+  event.reply("tns-connections", tnsConnections);
 });
 
 ipcMain.on("login-attempt", async (event, credentials) => {
@@ -114,9 +154,8 @@ ipcMain.on("login-attempt", async (event, credentials) => {
       process.env.TNS_ADMIN = path.dirname(tnsnamesPath);
       console.log(`TNS_ADMIN configurado a: ${process.env.TNS_ADMIN}`);
     } else {
-      console.log('No se encontró tnsnames.ora, la conexión podría fallar');
+      console.log("No se encontró tnsnames.ora, la conexión podría fallar");
     }
-
 
     let connectionString;
     if (tnsConnections[selectedTns]) {
@@ -135,7 +174,7 @@ ipcMain.on("login-attempt", async (event, credentials) => {
     const connection = await oracledb.getConnection({
       user: credentials.username,
       password: credentials.password,
-      connectionString: connectionString ,
+      connectionString: connectionString,
     });
 
     // Guardar la sesión del usuario autenticado
@@ -152,9 +191,14 @@ ipcMain.on("login-attempt", async (event, credentials) => {
   }
 });
 ipcMain.handle("fetch-owner-from-db", async (event, objectName, objectType) => {
-  console.log('[fetch-owner-from-db] Buscando owner de:', objectName, 'tipo:', objectType);
+  console.log(
+    "[fetch-owner-from-db] Buscando owner de:",
+    objectName,
+    "tipo:",
+    objectType
+  );
   if (!userSession) {
-    console.log('[fetch-owner-from-db] No hay sesión activa');
+    console.log("[fetch-owner-from-db] No hay sesión activa");
     return null;
   }
   try {
@@ -166,21 +210,29 @@ ipcMain.handle("fetch-owner-from-db", async (event, objectName, objectType) => {
 
     const result = await connection.execute(
       `SELECT OWNER FROM DBA_OBJECTS WHERE OBJECT_NAME = :objectName AND OBJECT_TYPE = :objectType`,
-      { objectName: objectName.toUpperCase(), objectType: objectType.toUpperCase() },
+      {
+        objectName: objectName.toUpperCase(),
+        objectType: objectType.toUpperCase(),
+      },
       { outFormat: oracledb.OUT_FORMAT_OBJECT }
     );
 
     await connection.close();
 
     if (result.rows.length > 0) {
-      console.log('[fetch-owner-from-db] Owner encontrado:', result.rows[0].OWNER);
+      console.log(
+        "[fetch-owner-from-db] Owner encontrado:",
+        result.rows[0].OWNER
+      );
       return result.rows[0].OWNER;
     } else {
-      console.log('[fetch-owner-from-db] No se encontró el objeto en DBA_OBJECTS');
+      console.log(
+        "[fetch-owner-from-db] No se encontró el objeto en DBA_OBJECTS"
+      );
       return null;
     }
   } catch (err) {
-    console.error('[fetch-owner-from-db] Error:', err);
+    console.error("[fetch-owner-from-db] Error:", err);
     return null;
   }
 });
@@ -307,9 +359,12 @@ function normalizeOracleCode(code, objectType, objectName) {
 
 ipcMain.on(
   "compare-code",
-  async (event, { fileContent, schema, objectType, objectName, filePath, fileMetadata }) => {
-    console.log('Recibido en main.js - filePath:', filePath);
-    console.log('Tipo de dato de filePath:', typeof filePath);
+  async (
+    event,
+    { fileContent, schema, objectType, objectName, filePath, fileMetadata }
+  ) => {
+    console.log("Recibido en main.js - filePath:", filePath);
+    console.log("Tipo de dato de filePath:", typeof filePath);
     if (!userSession) {
       event.reply("compare-response", "Error: No hay usuario autenticado.");
       return;
@@ -337,10 +392,11 @@ ipcMain.on(
           WHERE OWNER = :schema 
           AND OBJECT_NAME = :objectName 
           AND OBJECT_TYPE = :objectType`,
-          { 
-            schema, 
-            objectName, 
-            objectType: objectType === 'PACKAGE BODY' ? 'PACKAGE BODY' : objectType 
+          {
+            schema,
+            objectName,
+            objectType:
+              objectType === "PACKAGE BODY" ? "PACKAGE BODY" : objectType,
           }
         );
 
@@ -351,30 +407,32 @@ ipcMain.on(
       } catch (dateError) {
         console.log("Error al obtener fechas del objeto:", dateError);
       }
-      console.log('Intentando obtener fechas para el archivo en ruta:', filePath);
+      console.log(
+        "Intentando obtener fechas para el archivo en ruta:",
+        filePath
+      );
 
       // Obtener fechas del archivo
-    let fileDates = { created: null, modified: null };
-    
-    // Si tenemos la metadata del archivo (para comparación individual)
-    if (fileMetadata) {
-      // Usamos lastModified para ambas fechas ya que el objeto File solo proporciona esa fecha
-      fileDates.modified = new Date(fileMetadata.lastModified);
-      fileDates.created = new Date(fileMetadata.lastModified); // Misma fecha como fallback
-      console.log('fileDates calculado desde metadata:', fileDates);
-    } 
-    // Si tenemos la ruta del archivo (para comparación por lotes)
-    else if (filePath) {
-      try {
-        const stats = fs.statSync(filePath);
-        fileDates.created = stats.birthtime;
-        fileDates.modified = stats.mtime;
-        console.log('fileDates calculado desde ruta de archivo:', fileDates);
-      } catch (fileError) {
-        console.log("Error al obtener fechas del archivo:", fileError);
+      let fileDates = { created: null, modified: null };
+
+      // Si tenemos la metadata del archivo (para comparación individual)
+      if (fileMetadata) {
+        // Usamos lastModified para ambas fechas ya que el objeto File solo proporciona esa fecha
+        fileDates.modified = new Date(fileMetadata.lastModified);
+        fileDates.created = new Date(fileMetadata.lastModified); // Misma fecha como fallback
+        console.log("fileDates calculado desde metadata:", fileDates);
       }
-    }
-      
+      // Si tenemos la ruta del archivo (para comparación por lotes)
+      else if (filePath) {
+        try {
+          const stats = fs.statSync(filePath);
+          fileDates.created = stats.birthtime;
+          fileDates.modified = stats.mtime;
+          console.log("fileDates calculado desde ruta de archivo:", fileDates);
+        } catch (fileError) {
+          console.log("Error al obtener fechas del archivo:", fileError);
+        }
+      }
 
       // Para PACKAGE, obtener tanto spec como body
       if (objectType === "PACKAGE") {
@@ -749,9 +807,9 @@ ipcMain.on(
       const hasDifferences = differences.some(
         (part) => part.added || part.removed
       );
-      console.log('Enviando respuesta con fechas:', {
+      console.log("Enviando respuesta con fechas:", {
         objectDates: objectDates,
-        fileDates: fileDates
+        fileDates: fileDates,
       });
 
       // Preparar respuesta
@@ -763,7 +821,7 @@ ipcMain.on(
         specCodePresent: !!specCode,
         bodyCodePresent: !!bodyCode,
         objectDates,
-        fileDates
+        fileDates,
       });
 
       event.reply("compare-response", response);
@@ -776,126 +834,130 @@ ipcMain.on(
 );
 
 // Diálogo para seleccionar carpeta
-ipcMain.on('open-folder-dialog', async (event) => {
-    try {
-      const result = await dialog.showOpenDialog({
-        properties: ['openDirectory']
-      });
-      
-      if (!result.canceled && result.filePaths.length > 0) {
-        event.reply('selected-folder', result.filePaths[0]);
-      }
-    } catch (error) {
-      console.error('Error al abrir el diálogo de carpetas:', error);
+ipcMain.on("open-folder-dialog", async (event) => {
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ["openDirectory"],
+    });
+
+    if (!result.canceled && result.filePaths.length > 0) {
+      event.reply("selected-folder", result.filePaths[0]);
     }
-  });
-  
-  // Escanear carpeta para buscar archivos
-  ipcMain.on('scan-folder', async (event, { folderPath, extensions }) => {
-    try {
-      // Comprobar que la ruta existe
-      if (!fs.existsSync(folderPath)) {
-        event.reply('scan-results', []);
-        return;
-      }
-      
-      // Función recursiva para escanear directorios
-      function scanDirectory(dirPath) {
-        let results = [];
-        const items = fs.readdirSync(dirPath);
-        
-        for (const item of items) {
-          const itemPath = path.join(dirPath, item);
-          const stat = fs.statSync(itemPath);
-          
-          if (stat.isDirectory()) {
-            // Recursivamente escanear subdirectorios
-            results = results.concat(scanDirectory(itemPath));
-          } else {
-            // Verificar si la extensión del archivo coincide con alguna de las solicitadas
-            const ext = path.extname(item).toLowerCase();
-            if (extensions.includes(ext)) {
-              results.push(itemPath);
-            }
+  } catch (error) {
+    console.error("Error al abrir el diálogo de carpetas:", error);
+  }
+});
+
+// Escanear carpeta para buscar archivos
+ipcMain.on("scan-folder", async (event, { folderPath, extensions }) => {
+  try {
+    // Comprobar que la ruta existe
+    if (!fs.existsSync(folderPath)) {
+      event.reply("scan-results", []);
+      return;
+    }
+
+    // Función recursiva para escanear directorios
+    function scanDirectory(dirPath) {
+      let results = [];
+      const items = fs.readdirSync(dirPath);
+
+      for (const item of items) {
+        const itemPath = path.join(dirPath, item);
+        const stat = fs.statSync(itemPath);
+
+        if (stat.isDirectory()) {
+          // Recursivamente escanear subdirectorios
+          results = results.concat(scanDirectory(itemPath));
+        } else {
+          // Verificar si la extensión del archivo coincide con alguna de las solicitadas
+          const ext = path.extname(item).toLowerCase();
+          if (extensions.includes(ext)) {
+            results.push(itemPath);
           }
         }
-        
-        return results;
       }
-      
-      const files = scanDirectory(folderPath);
-      event.reply('scan-results', files);
-      
-    } catch (error) {
-      console.error('Error al escanear la carpeta:', error);
-      event.reply('scan-results', []);
+
+      return results;
     }
-  });
-  
-  ipcMain.on('read-file', async (event, filePath) => {
-    try {
-      if (fs.existsSync(filePath)) {
-        // Leer como buffer para tener flexibilidad con la codificación
-        const buffer = fs.readFileSync(filePath);
-        
-        // Intentar varias codificaciones comunes en orden de probabilidad
-        const encodings = ['windows-1252', 'ISO-8859-1', 'latin1', 'utf8'];
-        let fileContent = null;
-        
-        // Detectar codificación probando cada una
-        for (const encoding of encodings) {
-          try {
-            // Intentar decodificar con esta codificación
-            const decodedText = buffer.toString(encoding);
-            
-            // Verificar si hay caracteres extraños que indican codificación incorrecta
-            if (!decodedText.includes('�')) {
-              fileContent = decodedText;
-              console.log(`Archivo leído correctamente con codificación: ${encoding}`);
-              break;
-            }
-          } catch (encodingError) {
-            console.log(`Error con codificación ${encoding}:`, encodingError.message);
+
+    const files = scanDirectory(folderPath);
+    event.reply("scan-results", files);
+  } catch (error) {
+    console.error("Error al escanear la carpeta:", error);
+    event.reply("scan-results", []);
+  }
+});
+
+ipcMain.on("read-file", async (event, filePath) => {
+  try {
+    if (fs.existsSync(filePath)) {
+      // Leer como buffer para tener flexibilidad con la codificación
+      const buffer = fs.readFileSync(filePath);
+
+      // Intentar varias codificaciones comunes en orden de probabilidad
+      const encodings = ["windows-1252", "ISO-8859-1", "latin1", "utf8"];
+      let fileContent = null;
+
+      // Detectar codificación probando cada una
+      for (const encoding of encodings) {
+        try {
+          // Intentar decodificar con esta codificación
+          const decodedText = buffer.toString(encoding);
+
+          // Verificar si hay caracteres extraños que indican codificación incorrecta
+          if (!decodedText.includes("�")) {
+            fileContent = decodedText;
+            console.log(
+              `Archivo leído correctamente con codificación: ${encoding}`
+            );
+            break;
           }
+        } catch (encodingError) {
+          console.log(
+            `Error con codificación ${encoding}:`,
+            encodingError.message
+          );
         }
-        
-        // Si todas las codificaciones fallan, usar windows-1252 como última opción
-        if (!fileContent) {
-          fileContent = buffer.toString('windows-1252');
-          console.log('Usando windows-1252 como fallback');
-        }
-        
-        event.reply('file-content', fileContent);
-      } else {
-        event.reply('file-content', null);
       }
-    } catch (error) {
-      console.error('Error al leer el archivo:', error);
-      event.reply('file-content', null);
+
+      // Si todas las codificaciones fallan, usar windows-1252 como última opción
+      if (!fileContent) {
+        fileContent = buffer.toString("windows-1252");
+        console.log("Usando windows-1252 como fallback");
+      }
+
+      event.reply("file-content", fileContent);
+    } else {
+      event.reply("file-content", null);
     }
-  });
+  } catch (error) {
+    console.error("Error al leer el archivo:", error);
+    event.reply("file-content", null);
+  }
+});
 ipcMain.handle("get-database-name", async () => {
   if (!userSession) {
     console.log("[get-database-name] No hay sesión activa");
     return "Desconocida"; // Si no hay sesión activa, devolvemos un valor por defecto
   }
-  
+
   try {
     const connection = await oracledb.getConnection(userSession);
-    
+
     // Ejecutamos una consulta para obtener el nombre de la base de datos
-    const result = await connection.execute(
-      `SELECT name FROM v$database`
-    );
-    
+    const result = await connection.execute(`SELECT name FROM v$database`);
+
     // Cerrar la conexión
     await connection.close();
-    
+
     // Devolver el nombre de la base de datos
     return result.rows[0][0]; // Suponiendo que la consulta devuelve el nombre de la base de datos en la primera columna
-    
   } catch (error) {
-    console.error("[get-database-name] Error al obtener el nombre de la base de datos:", error);
+    console.error(
+      "[get-database-name] Error al obtener el nombre de la base de datos:",
+      error
+    );
     return "Desconocida"; // Si ocurre un error, devolvemos un valor por defecto
   }
 });
@@ -906,16 +968,16 @@ async function readClobAsString(clob) {
       return;
     }
 
-    let clobData = '';
+    let clobData = "";
 
-    clob.setEncoding('utf8');
-    clob.on('data', chunk => {
+    clob.setEncoding("utf8");
+    clob.on("data", (chunk) => {
       clobData += chunk;
     });
-    clob.on('end', () => {
+    clob.on("end", () => {
       resolve(clobData);
     });
-    clob.on('error', err => {
+    clob.on("error", (err) => {
       reject(err);
     });
   });
@@ -923,12 +985,12 @@ async function readClobAsString(clob) {
 function insertSlashesInPackageDDL(ddl, objectName) {
   // Busca el final de la spec: línea que contiene "END <objectName>;"
   // La función es case insensitive
-  const regexEndSpec = new RegExp(`(END\\s+${objectName}\\s*;)`, 'i');
+  const regexEndSpec = new RegExp(`(END\\s+${objectName}\\s*;)`, "i");
 
   const match = ddl.match(regexEndSpec);
   if (!match) {
     // No encontró el final de la spec, solo agrega slash al final
-    return ddl.trim() + '\n/\n';
+    return ddl.trim() + "\n/\n";
   }
 
   // Índice donde termina la spec
@@ -939,23 +1001,37 @@ function insertSlashesInPackageDDL(ddl, objectName) {
   const restPart = ddl.slice(endIndex).trim();
 
   // Asegura que cada parte termina con /
-  const specWithSlash = specPart.endsWith('/') ? specPart : specPart + '\n/';
-  const restWithSlash = restPart.length === 0
-    ? ''
-    : (restPart.endsWith('/') ? restPart : restPart + '\n/');
+  const specWithSlash = specPart.endsWith("/") ? specPart : specPart + "\n/";
+  const restWithSlash =
+    restPart.length === 0
+      ? ""
+      : restPart.endsWith("/")
+      ? restPart
+      : restPart + "\n/";
 
   // Concatenar y devolver
-  return specWithSlash + '\n\n' + restWithSlash;
+  return specWithSlash + "\n\n" + restWithSlash;
 }
-async function backupObjectCode(connection, schema, objectName, backupDir, objectType) {
+async function backupObjectCode(
+  connection,
+  schema,
+  objectName,
+  backupDir,
+  objectType
+) {
   try {
-    const schemaU = schema ? schema.toUpperCase() : (connection.user ? connection.user.toUpperCase() : null);
+    const schemaU = schema
+      ? schema.toUpperCase()
+      : connection.user
+      ? connection.user.toUpperCase()
+      : null;
     const objectNameU = objectName.toUpperCase();
 
-    if (!schemaU) throw new Error('No se pudo determinar el esquema para el backup');
+    if (!schemaU)
+      throw new Error("No se pudo determinar el esquema para el backup");
 
     let ddlObjectType = objectType.toUpperCase();
-    if (ddlObjectType === 'PACKAGE BODY') ddlObjectType = 'PACKAGE_BODY';
+    if (ddlObjectType === "PACKAGE BODY") ddlObjectType = "PACKAGE_BODY";
 
     const result = await connection.execute(
       `SELECT DBMS_METADATA.GET_DDL(:obj_type, :obj_name, :owner) AS DDL FROM DUAL`,
@@ -971,31 +1047,44 @@ async function backupObjectCode(connection, schema, objectName, backupDir, objec
     const ddl = await readClobAsString(clob);
 
     if (!ddl) {
-      throw new Error('No se pudo leer el DDL completo como texto.');
+      throw new Error("No se pudo leer el DDL completo como texto.");
     }
 
     const ddlWithSlashes = insertSlashesInPackageDDL(ddl, objectNameU);
-
 
     if (!fs.existsSync(backupDir)) {
       fs.mkdirSync(backupDir, { recursive: true });
     }
 
-    const now = new Date();
-    const fechaHora = now.toISOString().replace(/T/, '_').replace(/:/g, '').split('.')[0];
+    const now = new Date(); // Obtener la fecha y hora local
 
-    const safeSchema = schemaU.replace(/[^a-zA-Z0-9]/g, '_');
-    const safeName = objectNameU.replace(/[^a-zA-Z0-9]/g, '_');
+    // Obtener la diferencia de la zona horaria en minutos (por ejemplo, UTC-5)
+    const timeOffset = now.getTimezoneOffset(); // El valor es en minutos, por ejemplo, -300 para UTC-5
 
-    let extension = '.sql';
-    const objType = objectType ? objectType.toUpperCase() : '';
+    // Ajustar la hora según la diferencia de zona horaria
+    now.setMinutes(now.getMinutes() - timeOffset);
 
-    if (objType.includes('PACKAGE BODY') || objType === 'PACKAGE') {
-      extension = '.pck';
-    } else if (objType === 'FUNCTION') {
-      extension = '.fnc';
-    } else if (objType === 'PROCEDURE') {
-      extension = '.prc';
+    // Formatear la fecha y hora como 'YYYY-MM-DD_HH-MM-SS'
+    const fechaHora = now
+      .toISOString()
+      .replace(/T/, "_")
+      .replace(/:/g, "")
+      .split(".")[0]; // Formato 'YYYY-MM-DD_HH-MM-SS'
+
+    console.log(fechaHora); // Imprime la fecha y hora local correctamente ajustada
+
+    const safeSchema = schemaU.replace(/[^a-zA-Z0-9]/g, "_");
+    const safeName = objectNameU.replace(/[^a-zA-Z0-9]/g, "_");
+
+    let extension = ".sql";
+    const objType = objectType ? objectType.toUpperCase() : "";
+
+    if (objType.includes("PACKAGE BODY") || objType === "PACKAGE") {
+      extension = ".pck";
+    } else if (objType === "FUNCTION") {
+      extension = ".fnc";
+    } else if (objType === "PROCEDURE") {
+      extension = ".prc";
     }
 
     // Mueve esta línea antes de usar backupPath
@@ -1003,7 +1092,7 @@ async function backupObjectCode(connection, schema, objectName, backupDir, objec
     const backupPath = path.join(backupDir, fileName);
 
     // Ahora sí puedes usar backupPath
-    fs.writeFileSync(backupPath, ddlWithSlashes, 'utf8');
+    fs.writeFileSync(backupPath, ddlWithSlashes, "utf8");
 
     return backupPath;
   } catch (error) {
@@ -1016,15 +1105,15 @@ async function applyScript(connection, scriptContent) {
   const blocks = scriptContent
     .split(/\r?\n/)
     .reduce((acc, line) => {
-      if (line.trim() === '/') {
-        acc.push('');
+      if (line.trim() === "/") {
+        acc.push("");
       } else {
-        if (acc.length === 0) acc.push('');
-        acc[acc.length - 1] += line + '\n';
+        if (acc.length === 0) acc.push("");
+        acc[acc.length - 1] += line + "\n";
       }
       return acc;
     }, [])
-    .filter(block => block.trim() !== '');
+    .filter((block) => block.trim() !== "");
 
   try {
     for (const block of blocks) {
@@ -1036,16 +1125,22 @@ async function applyScript(connection, scriptContent) {
     return err;
   }
 }
-ipcMain.on('apply-scripts', async (event, data) => {
+ipcMain.on("apply-scripts", async (event, data) => {
   const { scripts, backupPath } = data;
 
   if (!userSession) {
-    event.reply('apply-scripts-response', { success: false, message: 'No hay sesión activa.' });
+    event.reply("apply-scripts-response", {
+      success: false,
+      message: "No hay sesión activa.",
+    });
     return;
   }
 
   if (!backupPath) {
-    event.reply('apply-scripts-response', { success: false, message: 'No se recibió ruta para backup.' });
+    event.reply("apply-scripts-response", {
+      success: false,
+      message: "No se recibió ruta para backup.",
+    });
     return;
   }
 
@@ -1059,30 +1154,56 @@ ipcMain.on('apply-scripts', async (event, data) => {
       const { schema, objectName, objectType, content } = script;
 
       try {
-        const backupFile = await backupObjectCode(connection, schema, objectName, backupPath, objectType);
+        const backupFile = await backupObjectCode(
+          connection,
+          schema,
+          objectName,
+          backupPath,
+          objectType
+        );
 
         if (!backupFile) {
-          results.push({ objectName, status: 'No existe objeto para backup. Continuando con aplicación.' });
+          results.push({
+            objectName,
+            status: "No existe objeto para backup. Continuando con aplicación.",
+          });
         } else {
-          results.push({ objectName, status: `Backup creado en: ${backupFile}` });
+          results.push({
+            objectName,
+            status: `Backup creado en: ${backupFile}`,
+          });
         }
 
         const execResult = await applyScript(connection, content);
 
         if (execResult === true) {
-          results.push({ objectName, status: 'Aplicado con éxito' });
+          results.push({ objectName, status: "Aplicado con éxito" });
         } else {
-          results.push({ objectName, status: 'Error al aplicar', error: execResult.message });
+          results.push({
+            objectName,
+            status: "Error al aplicar",
+            error: execResult.message,
+          });
         }
       } catch (error) {
-        results.push({ objectName, status: 'Error inesperado', error: error.message });
+        results.push({
+          objectName,
+          status: "Error inesperado",
+          error: error.message,
+        });
       }
     }
 
     await connection.close();
-    event.reply('apply-scripts-response', { success: true, results });
+    event.reply("apply-scripts-response", { success: true, results });
   } catch (err) {
-    if (connection) try { await connection.close(); } catch {}
-    event.reply('apply-scripts-response', { success: false, message: 'Error al conectar o ejecutar: ' + err.message });
+    if (connection)
+      try {
+        await connection.close();
+      } catch {}
+    event.reply("apply-scripts-response", {
+      success: false,
+      message: "Error al conectar o ejecutar: " + err.message,
+    });
   }
 });
