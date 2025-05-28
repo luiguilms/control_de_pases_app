@@ -1012,6 +1012,7 @@ function insertSlashesInPackageDDL(ddl, objectName) {
   // Concatenar y devolver
   return specWithSlash + "\n\n" + restWithSlash;
 }
+
 async function backupObjectCode(
   connection,
   schema,
@@ -1033,13 +1034,50 @@ async function backupObjectCode(
     let ddlObjectType = objectType.toUpperCase();
     if (ddlObjectType === "PACKAGE BODY") ddlObjectType = "PACKAGE_BODY";
 
-    const result = await connection.execute(
-      `SELECT DBMS_METADATA.GET_DDL(:obj_type, :obj_name, :owner) AS DDL FROM DUAL`,
-      { obj_type: ddlObjectType, obj_name: objectNameU, owner: schemaU },
+    // PRIMERO: Verificar si el objeto existe antes de intentar hacer GET_DDL
+    const objectExistsQuery = `
+      SELECT COUNT(*) as OBJECT_COUNT 
+      FROM ALL_OBJECTS 
+      WHERE OWNER = :owner 
+        AND OBJECT_NAME = :obj_name 
+        AND OBJECT_TYPE = :obj_type
+    `;
+
+    const existsResult = await connection.execute(
+      objectExistsQuery,
+      { 
+        owner: schemaU, 
+        obj_name: objectNameU, 
+        obj_type: ddlObjectType 
+      },
       { outFormat: oracledb.OUT_FORMAT_OBJECT }
     );
 
+    if (!existsResult.rows.length || existsResult.rows[0].OBJECT_COUNT === 0) {
+      console.log(`Objeto ${objectNameU} de tipo ${objectType} no existe en esquema ${schemaU}`);
+      return null; // Objeto no existe, retornar null para continuar sin backup
+    }
+
+    // SEGUNDO: Si existe, intentar obtener el DDL
+    let result;
+    try {
+      result = await connection.execute(
+        `SELECT DBMS_METADATA.GET_DDL(:obj_type, :obj_name, :owner) AS DDL FROM DUAL`,
+        { obj_type: ddlObjectType, obj_name: objectNameU, owner: schemaU },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+    } catch (ddlError) {
+      // Manejo específico para errores de DBMS_METADATA
+      if (ddlError.message.includes('ORA-31603')) {
+        console.log(`Objeto ${objectNameU} no encontrado para DDL en esquema ${schemaU}`);
+        return null;
+      }
+      // Si es otro tipo de error, relanzarlo
+      throw ddlError;
+    }
+
     if (!result.rows.length || !result.rows[0].DDL) {
+      console.log(`No se pudo obtener DDL para ${objectNameU}`);
       return null;
     }
 
