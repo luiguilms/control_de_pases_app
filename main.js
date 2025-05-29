@@ -1013,6 +1013,28 @@ function insertSlashesInPackageDDL(ddl, objectName) {
   return specWithSlash + "\n\n" + restWithSlash;
 }
 
+// Función para limpiar el DDL obtenido de Oracle
+function cleanDDL(ddl, objectName) {
+  if (!ddl) return ddl;
+  
+  let cleanedDDL = ddl;
+  
+  // 1. Remover la palabra EDITIONABLE
+  cleanedDDL = cleanedDDL.replace(/\bEDITIONABLE\s+/gi, '');
+  
+  // 2. Remover las comillas dobles de los nombres de esquema y objeto
+  cleanedDDL = cleanedDDL.replace(/"([^"]+)"\."([^"]+)"/g, '$2');
+  cleanedDDL = cleanedDDL.replace(/"([^"]+)"/g, '$1');
+  
+  // 3. Remover referencias al esquema específico en CREATE statements
+  // Buscar patrones como: CREATE OR REPLACE PACKAGE SCHEMA.OBJECT
+  const createRegex = /(CREATE\s+OR\s+REPLACE\s+(?:PACKAGE\s+BODY\s+|PACKAGE\s+|FUNCTION\s+|PROCEDURE\s+))([^.\s]+\.)?([^\s]+)/gi;
+  cleanedDDL = cleanedDDL.replace(createRegex, '$1$3');
+  
+  return cleanedDDL;
+}
+
+// Función modificada de backupObjectCode
 async function backupObjectCode(
   connection,
   schema,
@@ -1034,7 +1056,7 @@ async function backupObjectCode(
     let ddlObjectType = objectType.toUpperCase();
     if (ddlObjectType === "PACKAGE BODY") ddlObjectType = "PACKAGE_BODY";
 
-    // PRIMERO: Verificar si el objeto existe antes de intentar hacer GET_DDL
+    // Verificar si el objeto existe
     const objectExistsQuery = `
       SELECT COUNT(*) as OBJECT_COUNT 
       FROM ALL_OBJECTS 
@@ -1055,10 +1077,10 @@ async function backupObjectCode(
 
     if (!existsResult.rows.length || existsResult.rows[0].OBJECT_COUNT === 0) {
       console.log(`Objeto ${objectNameU} de tipo ${objectType} no existe en esquema ${schemaU}`);
-      return null; // Objeto no existe, retornar null para continuar sin backup
+      return null;
     }
 
-    // SEGUNDO: Si existe, intentar obtener el DDL
+    // Obtener el DDL
     let result;
     try {
       result = await connection.execute(
@@ -1067,12 +1089,10 @@ async function backupObjectCode(
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
       );
     } catch (ddlError) {
-      // Manejo específico para errores de DBMS_METADATA
       if (ddlError.message.includes('ORA-31603')) {
         console.log(`Objeto ${objectNameU} no encontrado para DDL en esquema ${schemaU}`);
         return null;
       }
-      // Si es otro tipo de error, relanzarlo
       throw ddlError;
     }
 
@@ -1088,28 +1108,23 @@ async function backupObjectCode(
       throw new Error("No se pudo leer el DDL completo como texto.");
     }
 
-    const ddlWithSlashes = insertSlashesInPackageDDL(ddl, objectNameU);
+    // *** AQUÍ ES LA PARTE NUEVA: Limpiar el DDL ***
+    const cleanedDDL = cleanDDL(ddl, objectNameU);
+    const ddlWithSlashes = insertSlashesInPackageDDL(cleanedDDL, objectNameU);
 
     if (!fs.existsSync(backupDir)) {
       fs.mkdirSync(backupDir, { recursive: true });
     }
 
-    const now = new Date(); // Obtener la fecha y hora local
-
-    // Obtener la diferencia de la zona horaria en minutos (por ejemplo, UTC-5)
-    const timeOffset = now.getTimezoneOffset(); // El valor es en minutos, por ejemplo, -300 para UTC-5
-
-    // Ajustar la hora según la diferencia de zona horaria
+    const now = new Date();
+    const timeOffset = now.getTimezoneOffset();
     now.setMinutes(now.getMinutes() - timeOffset);
 
-    // Formatear la fecha y hora como 'YYYY-MM-DD_HH-MM-SS'
     const fechaHora = now
       .toISOString()
       .replace(/T/, "_")
       .replace(/:/g, "")
-      .split(".")[0]; // Formato 'YYYY-MM-DD_HH-MM-SS'
-
-    console.log(fechaHora); // Imprime la fecha y hora local correctamente ajustada
+      .split(".")[0];
 
     const safeSchema = schemaU.replace(/[^a-zA-Z0-9]/g, "_");
     const safeName = objectNameU.replace(/[^a-zA-Z0-9]/g, "_");
@@ -1125,11 +1140,9 @@ async function backupObjectCode(
       extension = ".prc";
     }
 
-    // Mueve esta línea antes de usar backupPath
     const fileName = `${safeSchema}_${safeName}_${fechaHora}${extension}`;
     const backupPath = path.join(backupDir, fileName);
 
-    // Ahora sí puedes usar backupPath
     fs.writeFileSync(backupPath, ddlWithSlashes, "utf8");
 
     return backupPath;
