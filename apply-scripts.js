@@ -38,28 +38,7 @@ function extractObjectInfo(fileContent, fileName) {
   const match = fileContent.match(regex);
 
   if (!match) {
-    // No encontró patrón válido, como fallback usa el nombre del archivo
-    const upperContent = fileContent.toUpperCase();
-    let objectType = null;
-    if (upperContent.includes("PACKAGE BODY")) objectType = "PACKAGE BODY";
-    else if (upperContent.includes("PACKAGE")) objectType = "PACKAGE";
-    else if (upperContent.includes("FUNCTION")) objectType = "FUNCTION";
-    else if (upperContent.includes("PROCEDURE")) objectType = "PROCEDURE";
-
-    const baseName = path.basename(fileName, path.extname(fileName));
-    const parts = baseName.split("_");
-
-    let schema = null;
-    let objectName = null;
-
-    if (parts.length >= 2) {
-      schema = parts[0].toUpperCase();
-      objectName = parts.slice(1).join("_").toUpperCase();
-    } else {
-      objectName = baseName.toUpperCase();
-    }
-
-    return { schema, objectName, objectType };
+    throw new Error(`No se pudo encontrar patrón CREATE OR REPLACE válido en ${fileName}. El archivo debe contener una declaración SQL válida.`);
   }
 
   const objectType = match[1].toUpperCase();
