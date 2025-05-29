@@ -1022,14 +1022,12 @@ function cleanDDL(ddl, objectName) {
   // 1. Remover la palabra EDITIONABLE
   cleanedDDL = cleanedDDL.replace(/\bEDITIONABLE\s+/gi, '');
   
-  // 2. Remover las comillas dobles de los nombres de esquema y objeto
-  cleanedDDL = cleanedDDL.replace(/"([^"]+)"\."([^"]+)"/g, '$2');
+  // 2. Remover solo las comillas dobles, manteniendo esquema y objeto
+  // Convierte "SCHEMA"."OBJECT" a SCHEMA.OBJECT
+  cleanedDDL = cleanedDDL.replace(/"([^"]+)"\."([^"]+)"/g, '$1.$2');
+  // También remover comillas individuales si las hay
   cleanedDDL = cleanedDDL.replace(/"([^"]+)"/g, '$1');
   
-  // 3. Remover referencias al esquema específico en CREATE statements
-  // Buscar patrones como: CREATE OR REPLACE PACKAGE SCHEMA.OBJECT
-  const createRegex = /(CREATE\s+OR\s+REPLACE\s+(?:PACKAGE\s+BODY\s+|PACKAGE\s+|FUNCTION\s+|PROCEDURE\s+))([^.\s]+\.)?([^\s]+)/gi;
-  cleanedDDL = cleanedDDL.replace(createRegex, '$1$3');
   
   return cleanedDDL;
 }
