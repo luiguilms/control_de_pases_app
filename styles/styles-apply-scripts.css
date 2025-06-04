@@ -1,16 +1,20 @@
 body {
   font-family: Arial, sans-serif;
   margin: 20px;
+  min-height: 100vh;
 }
+
 .header-container {
   display: flex;
   align-items: center;
   gap: 15px;
   margin-bottom: 25px;
 }
+
 .header-container h2 {
   margin-right: auto;
 }
+
 .batch-button {
   background-color: #007acc;
   color: white;
@@ -21,28 +25,36 @@ body {
   text-decoration: none;
   font-size: 14px;
 }
+
 .batch-button:hover {
   background-color: #005fa3;
 }
+
 .apply-container {
-  max-width: 700px;
-  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  margin: 0;
 }
+
 .input-group {
   margin-bottom: 15px;
   display: flex;
   align-items: center;
   gap: 10px;
 }
+
 label {
   width: 140px;
   font-weight: bold;
 }
+
 input[type="text"] {
   flex-grow: 1;
   padding: 6px 8px;
   font-size: 14px;
 }
+
 button.primary-button {
   background-color: #28a745;
   color: white;
@@ -51,14 +63,18 @@ button.primary-button {
   font-size: 16px;
   cursor: pointer;
   border-radius: 5px;
+  margin-bottom: 15px;
 }
+
 button.primary-button:disabled {
   background-color: #94d3a2;
   cursor: not-allowed;
 }
+
 button.primary-button:hover:not(:disabled) {
   background-color: #218838;
 }
+
 #applyLoader {
   margin-top: 15px;
   text-align: center;
@@ -66,30 +82,111 @@ button.primary-button:hover:not(:disabled) {
   color: #555;
   display: none;
 }
+
 #resultContainer {
-  margin-top: 30px;
-  max-width: 700px;
-  margin-left: auto;
-  margin-right: auto;
+  margin-top: 15px;
   font-size: 14px;
   line-height: 1.4;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 15px;
+  background-color: #f8f9fa;
 }
+
 #resultContainer ul {
   list-style-type: disc;
   padding-left: 20px;
 }
+
 #resultContainer li {
   margin-bottom: 8px;
 }
-#resultContainer em {
-  color: red;
+
+#resultContainer h3 {
+  color: #333;
+  margin-top: 0;
+  margin-bottom: 15px;
+  border-bottom: 2px solid #007acc;
+  padding-bottom: 8px;
 }
+
+/* AQUÍ ESTÁ EL CAMBIO PRINCIPAL */
 #fileList {
-  max-height: 300px;
+  min-height: 400px; /* Altura fija generosa */
   overflow-y: auto;
   border: 1px solid #ccc;
-  padding: 10px;
+  padding: 15px;
+  background-color: #f9f9f9;
+  margin-bottom: 15px;
 }
+
 #fileList div {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #eee;
+}
+
+#fileList div:last-child {
+  border-bottom: none;
+}
+
+/* Estilos para el checkbox "Seleccionar todos" */
+#fileList div:first-child {
+  background-color: #f0f0f0;
+  padding: 10px;
+  margin: -5px -5px 15px -5px;
+  border-radius: 4px;
+  border-bottom: 2px solid #ccc !important;
+}
+
+#fileList div:first-child label {
+  font-weight: bold;
+  font-size: 15px;
+  color: #333;
+}
+
+/* Checkboxes */
+#fileList input[type="checkbox"] {
+  margin-right: 10px;
+  transform: scale(1.1);
+  cursor: pointer;
+}
+
+#fileList label {
+  cursor: pointer;
+  user-select: none;
+  display: inline-block;
+  line-height: 1.4;
+}
+
+#fileList label:hover {
+  color: #007acc;
+}
+
+/* Responsive para pantallas más pequeñas */
+@media (max-width: 768px) {
+  body {
+    margin: 10px;
+  }
+  
+  .input-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  label {
+    width: auto;
+    margin-bottom: 5px;
+  }
+  
+  .header-container {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  .header-container h2 {
+    margin-right: 0;
+    text-align: center;
+  }
 }

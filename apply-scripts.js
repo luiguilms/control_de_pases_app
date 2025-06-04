@@ -58,6 +58,31 @@ function extractObjectInfo(fileContent, fileName) {
   return { schema, objectName, objectType };
 }
 
+// Función para actualizar el estado del botón "Aplicar Scripts"
+function updateApplyButtonState() {
+  const checkedBoxes = fileList.querySelectorAll("input[type=checkbox]:checked:not(#selectAllCheckbox)");
+  startApplyButton.disabled = checkedBoxes.length === 0;
+}
+
+// Función para actualizar el estado del checkbox "Seleccionar todos"
+function updateSelectAllCheckboxState() {
+  const selectAllCheckbox = document.getElementById("selectAllCheckbox");
+  if (!selectAllCheckbox) return;
+
+  const allCheckboxes = fileList.querySelectorAll("input[type=checkbox]:not(#selectAllCheckbox)");
+  const checkedCheckboxes = fileList.querySelectorAll("input[type=checkbox]:checked:not(#selectAllCheckbox)");
+  
+  if (checkedCheckboxes.length === 0) {
+    selectAllCheckbox.indeterminate = false;
+    selectAllCheckbox.checked = false;
+  } else if (checkedCheckboxes.length === allCheckboxes.length) {
+    selectAllCheckbox.indeterminate = false;
+    selectAllCheckbox.checked = true;
+  } else {
+    selectAllCheckbox.indeterminate = true;
+  }
+}
+
 // Cargar y listar scripts de la carpeta con checkbox
 function loadScriptsList(folderPath) {
   fileList.innerHTML = "";
@@ -82,30 +107,6 @@ function loadScriptsList(folderPath) {
 
       if (!objectType || !objectName) return;
 
-      const div = document.createElement("div");
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.id = "chk_" + file;
-      checkbox.dataset.filePath = fullPath;
-      checkbox.dataset.schema = schema || "";
-      checkbox.dataset.objectName = objectName;
-      checkbox.dataset.objectType = objectType;
-
-      checkbox.addEventListener("change", () => {
-        startApplyButton.disabled =
-          fileList.querySelectorAll("input[type=checkbox]:checked").length ===
-          0;
-      });
-
-      const label = document.createElement("label");
-      label.htmlFor = checkbox.id;
-      label.textContent = `${file} (${objectType})`;
-
-      div.appendChild(checkbox);
-      div.appendChild(label);
-
-      fileList.appendChild(div);
-
       scriptsAvailable.push({
         file,
         fullPath,
@@ -118,7 +119,65 @@ function loadScriptsList(folderPath) {
 
     if (scriptsAvailable.length === 0) {
       fileList.textContent = "No se encontraron scripts válidos en la carpeta.";
+      return;
     }
+
+    // Crear checkbox "Seleccionar todos"
+    const selectAllDiv = document.createElement("div");
+    selectAllDiv.style.marginBottom = "10px";
+    selectAllDiv.style.paddingBottom = "10px";
+    selectAllDiv.style.borderBottom = "1px solid #ccc";
+    
+    const selectAllCheckbox = document.createElement("input");
+    selectAllCheckbox.type = "checkbox";
+    selectAllCheckbox.id = "selectAllCheckbox";
+    
+    selectAllCheckbox.addEventListener("change", () => {
+      const isChecked = selectAllCheckbox.checked;
+      const allCheckboxes = fileList.querySelectorAll("input[type=checkbox]:not(#selectAllCheckbox)");
+      
+      allCheckboxes.forEach(checkbox => {
+        checkbox.checked = isChecked;
+      });
+      
+      updateApplyButtonState();
+    });
+
+    const selectAllLabel = document.createElement("label");
+    selectAllLabel.htmlFor = "selectAllCheckbox";
+    selectAllLabel.textContent = "Seleccionar todos";
+    selectAllLabel.style.fontWeight = "bold";
+
+    selectAllDiv.appendChild(selectAllCheckbox);
+    selectAllDiv.appendChild(selectAllLabel);
+    fileList.appendChild(selectAllDiv);
+
+    // Crear checkboxes individuales
+    scriptsAvailable.forEach((script) => {
+      const div = document.createElement("div");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.id = "chk_" + script.file;
+      checkbox.dataset.filePath = script.fullPath;
+      checkbox.dataset.schema = script.schema || "";
+      checkbox.dataset.objectName = script.objectName;
+      checkbox.dataset.objectType = script.objectType;
+
+      checkbox.addEventListener("change", () => {
+        updateApplyButtonState();
+        updateSelectAllCheckboxState();
+      });
+
+      const label = document.createElement("label");
+      label.htmlFor = checkbox.id;
+      label.textContent = `${script.file} (${script.objectType})`;
+
+      div.appendChild(checkbox);
+      div.appendChild(label);
+
+      fileList.appendChild(div);
+    });
+
   } catch (err) {
     fileList.textContent = "Error leyendo la carpeta: " + err.message;
   }
@@ -127,7 +186,7 @@ function loadScriptsList(folderPath) {
 // Al hacer click en aplicar, enviar solo los scripts seleccionados
 startApplyButton.addEventListener("click", () => {
   const checkedBoxes = fileList.querySelectorAll(
-    "input[type=checkbox]:checked"
+    "input[type=checkbox]:checked:not(#selectAllCheckbox)"
   );
 
   if (checkedBoxes.length === 0) {
