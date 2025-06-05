@@ -110,20 +110,28 @@ button.primary-button:hover:not(:disabled) {
   padding-bottom: 8px;
 }
 
-/* AQUÍ ESTÁ EL CAMBIO PRINCIPAL */
+/* LISTA DE ARCHIVOS - MEJORADA */
 #fileList {
-  min-height: 400px; /* Altura fija generosa */
+  min-height: 400px;
   overflow-y: auto;
   border: 1px solid #ccc;
   padding: 15px;
   background-color: #f9f9f9;
   margin-bottom: 15px;
+  /* Permitir scroll horizontal si es necesario */
+  overflow-x: auto;
 }
 
 #fileList div {
   margin-bottom: 8px;
   padding: 6px 0;
   border-bottom: 1px solid #eee;
+  /* Flexbox para alinear checkbox y texto */
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  /* Evitar quebrar la línea innecesariamente */
+  min-width: fit-content;
 }
 
 #fileList div:last-child {
@@ -147,20 +155,37 @@ button.primary-button:hover:not(:disabled) {
 
 /* Checkboxes */
 #fileList input[type="checkbox"] {
-  margin-right: 10px;
+  margin-right: 0; /* Removemos el margin ya que usamos gap en flex */
   transform: scale(1.1);
   cursor: pointer;
+  /* Evitar que el checkbox se encoja */
+  flex-shrink: 0;
 }
 
 #fileList label {
   cursor: pointer;
   user-select: none;
-  display: inline-block;
+  /* Permitir que el texto se ajuste pero sin quebrar palabras innecesariamente */
+  word-break: break-word;
+  /* Mantener el texto en una línea cuando sea posible */
+  white-space: nowrap;
+  /* Si el texto es muy largo, permitir que se ajuste */
+  overflow-wrap: break-word;
+  /* Flexibilidad para crecer */
+  flex: 1;
+  /* Altura de línea consistente */
   line-height: 1.4;
 }
 
 #fileList label:hover {
   color: #007acc;
+}
+
+/* Para nombres muy largos que excedan el ancho disponible */
+@media (max-width: 1200px) {
+  #fileList label {
+    white-space: normal; /* Permitir salto de línea en pantallas más pequeñas */
+  }
 }
 
 /* Responsive para pantallas más pequeñas */
@@ -188,5 +213,15 @@ button.primary-button:hover:not(:disabled) {
   .header-container h2 {
     margin-right: 0;
     text-align: center;
+  }
+  
+  /* En móviles, permitir que los nombres se ajusten */
+  #fileList label {
+    white-space: normal;
+    font-size: 13px; /* Reducir ligeramente el tamaño */
+  }
+  
+  #fileList div {
+    align-items: flex-start; /* Alinear al inicio para textos largos */
   }
 }
