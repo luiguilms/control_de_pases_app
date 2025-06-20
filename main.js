@@ -1110,14 +1110,59 @@ async function backupObjectCode(
     const cleanedDDL = cleanDDL(ddl, objectNameU);
     const ddlWithSlashes = insertSlashesInPackageDDL(cleanedDDL, objectNameU);
 
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
-    }
-
+    // *** NUEVA LÓGICA DE ESTRUCTURA DE CARPETAS ***
     const now = new Date();
     const timeOffset = now.getTimezoneOffset();
     now.setMinutes(now.getMinutes() - timeOffset);
 
+    // Obtener componentes de fecha
+    const year = now.getFullYear().toString(); // "2025"
+    const month = (now.getMonth() + 1).toString().padStart(2, '0'); // "06"
+    const day = now.getDate().toString().padStart(2, '0'); // "20"
+    
+    const yearMonth = year + month; // "202506"
+    const monthDay = month + day;   // "0620"
+
+    // Construir la ruta base
+    const basePath = "\\\\INFO7324\\Base de Datos$\\Respaldo_Objetos_Pases";
+    
+    // Construir la ruta completa: basePath/2025/202506/0620/
+    const yearPath = path.join(basePath, year);
+    const yearMonthPath = path.join(yearPath, yearMonth);
+    const finalPath = path.join(yearMonthPath, monthDay);
+
+    // Crear las carpetas si no existen
+    try {
+      // Crear carpeta del año (ej: 2025)
+      if (!fs.existsSync(yearPath)) {
+        fs.mkdirSync(yearPath, { recursive: true });
+        console.log(`Carpeta creada: ${yearPath}`);
+      } else {
+        console.log(`Carpeta ya existe: ${yearPath}`);
+      }
+
+      // Crear carpeta año-mes (ej: 202506)
+      if (!fs.existsSync(yearMonthPath)) {
+        fs.mkdirSync(yearMonthPath, { recursive: true });
+        console.log(`Carpeta creada: ${yearMonthPath}`);
+      } else {
+        console.log(`Carpeta ya existe: ${yearMonthPath}`);
+      }
+
+      // Crear carpeta final mes-día (ej: 0620)
+      if (!fs.existsSync(finalPath)) {
+        fs.mkdirSync(finalPath, { recursive: true });
+        console.log(`Carpeta creada: ${finalPath}`);
+      } else {
+        console.log(`Carpeta ya existe: ${finalPath}`);
+      }
+
+    } catch (mkdirError) {
+      console.error('Error creando estructura de carpetas:', mkdirError);
+      throw new Error(`No se pudo crear la estructura de carpetas: ${mkdirError.message}`);
+    }
+
+    // Generar nombre del archivo
     const fechaHora = now
       .toISOString()
       .replace(/T/, "_")
@@ -1127,6 +1172,7 @@ async function backupObjectCode(
     const safeSchema = schemaU.replace(/[^a-zA-Z0-9]/g, "_");
     const safeName = objectNameU.replace(/[^a-zA-Z0-9]/g, "_");
 
+    // Determinar extensión
     let extension = ".sql";
     const objType = objectType ? objectType.toUpperCase() : "";
 
@@ -1138,13 +1184,19 @@ async function backupObjectCode(
       extension = ".prc";
     }
 
+    // Nombre final del archivo
     const fileName = `${safeSchema}_${safeName}_${fechaHora}${extension}`;
-    const backupPath = path.join(backupDir, fileName);
+    const backupFilePath = path.join(finalPath, fileName);
 
-    fs.writeFileSync(backupPath, ddlWithSlashes, "utf8");
+    // Guardar el archivo
+    fs.writeFileSync(backupFilePath, ddlWithSlashes, "utf8");
+    
+    console.log(`Backup guardado en: ${backupFilePath}`);
+    
+    return backupFilePath;
 
-    return backupPath;
   } catch (error) {
+    console.error('Error en backupObjectCode:', error);
     throw error;
   }
 }
