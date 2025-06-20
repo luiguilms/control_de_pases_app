@@ -221,20 +221,136 @@ startApplyButton.addEventListener("click", () => {
   });
 });
 
-// Escuchar respuesta del backend y mostrar resultados
+// Escuchar respuesta del backend y mostrar resultados - VERSIÓN MEJORADA
 ipcRenderer.on("apply-scripts-response", (event, data) => {
   applyLoader.style.display = "none";
   startApplyButton.disabled = false;
 
   if (!data.success) {
-    alert("Error: " + data.message);
+    // PROCESO DETENIDO POR ERROR
+    console.error('Proceso detenido:', data);
+    
+    // Mostrar mensaje de error principal
+    alert(`❌ PROCESO DETENIDO: ${data.message}`);
+    
+    // Si hay resultados parciales, mostrarlos con información detallada
+    if (data.results && data.results.length > 0) {
+      let html = "<h3>📋 Resultados del Proceso (INTERRUMPIDO)</h3>";
+      
+      // Panel de información del error
+      html += "<div style='background-color: #ffebee; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #f44336;'>";
+      html += "<h4 style='margin: 0 0 10px 0; color: #d32f2f;'>⚠️ PROCESO DETENIDO</h4>";
+      html += `<p><strong>Motivo:</strong> ${data.message}</p>`;
+      
+      if (data.stoppedAt && data.totalScripts) {
+        html += `<p><strong>Scripts procesados:</strong> ${data.stoppedAt} de ${data.totalScripts}</p>`;
+        if (data.remainingScripts > 0) {
+          html += `<p><strong>Scripts pendientes:</strong> ${data.remainingScripts} (NO ejecutados por seguridad)</p>`;
+        }
+      }
+      
+      html += "<p style='margin: 10px 0 0 0; font-style: italic;'>Los scripts restantes NO fueron ejecutados para evitar inconsistencias en la base de datos.</p>";
+      html += "</div>";
+      
+      // Lista de resultados
+      html += "<h4>📝 Detalle de Operaciones:</h4>";
+      html += "<ul style='list-style: none; padding: 0;'>";
+      
+      data.results.forEach((res, index) => {
+        const isError = res.status.includes("ERROR") || res.status.includes("Error") || res.status.includes("❌");
+        const isWarning = res.status.includes("⚠️");
+        const isSuccess = res.status.includes("✅");
+        
+        let itemStyle = "padding: 10px; margin: 5px 0; border-radius: 4px; border-left: 4px solid ";
+        let bgColor = "#f5f5f5";
+        
+        if (isError) {
+          itemStyle += "#f44336; background-color: #ffebee;";
+        } else if (isWarning) {
+          itemStyle += "#ff9800; background-color: #fff3e0;";
+        } else if (isSuccess) {
+          itemStyle += "#4caf50; background-color: #e8f5e8;";
+        } else {
+          itemStyle += "#2196f3; background-color: #e3f2fd;";
+        }
+        
+        html += `<li style="${itemStyle}">`;
+        html += `<strong>${res.objectName}</strong><br>`;
+        html += `<span style="font-size: 0.9em;">${res.status}</span>`;
+        
+        if (res.error) {
+          html += `<br><em style="color: #d32f2f; font-size: 0.8em;">Detalle: ${res.error}</em>`;
+        }
+        
+        if (res.errorCode) {
+          html += `<br><em style="color: #666; font-size: 0.8em;">Código de error: ${res.errorCode}</em>`;
+        }
+        
+        html += "</li>";
+      });
+      html += "</ul>";
+      
+      // Panel de recomendaciones
+      html += "<div style='background-color: #e3f2fd; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #2196f3;'>";
+      html += "<h4 style='margin: 0 0 10px 0; color: #1976d2;'>💡 Recomendaciones:</h4>";
+      html += "<ul style='margin: 5px 0; padding-left: 20px;'>";
+      html += "<li>Revisa y corrige el script que causó el error</li>";
+      html += "<li>Verifica la sintaxis SQL y las dependencias</li>";
+      html += "<li>Considera el orden de ejecución de los scripts</li>";
+      html += "<li>Una vez corregido, puedes volver a ejecutar desde donde se detuvo</li>";
+      html += "</ul>";
+      html += "</div>";
+      
+      resultContainer.innerHTML = html;
+    } else {
+      // No hay resultados parciales
+      resultContainer.innerHTML = `
+        <div style='background-color: #ffebee; padding: 15px; border-radius: 8px; border-left: 4px solid #f44336;'>
+          <h4 style='margin: 0 0 10px 0; color: #d32f2f;'>❌ Error Inicial</h4>
+          <p>${data.message}</p>
+        </div>
+      `;
+    }
     return;
   }
 
-  let html = "<h3>Resultados de Aplicación de Scripts:</h3><ul>";
+  // PROCESO EXITOSO - TODOS LOS SCRIPTS APLICADOS
+  console.log('Proceso completado exitosamente:', data);
+  
+  let html = "<h3>🎉 Proceso Completado Exitosamente</h3>";
+  
+  // Panel de éxito
+  html += "<div style='background-color: #e8f5e8; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;'>";
+  html += "<h4 style='margin: 0 0 10px 0; color: #2e7d32;'>✅ ÉXITO TOTAL</h4>";
+  html += `<p>${data.message}</p>`;
+  
+  if (data.processedScripts && data.totalScripts) {
+    html += `<p><strong>Scripts procesados:</strong> ${data.processedScripts} de ${data.totalScripts}</p>`;
+  }
+  
+  html += "</div>";
+  
+  // Lista de resultados exitosos
+  html += "<h4>📝 Detalle de Operaciones:</h4>";
+  html += "<ul style='list-style: none; padding: 0;'>";
+  
   data.results.forEach((res) => {
-    html += `<li><strong>${res.objectName}</strong>: ${res.status}`;
-    if (res.error) html += `<br><em>Error:</em> ${res.error}`;
+    const isBackup = res.status.includes("Backup");
+    const isSuccess = res.status.includes("✅");
+    const isWarning = res.status.includes("⚠️");
+    
+    let itemStyle = "padding: 8px; margin: 3px 0; border-radius: 4px; border-left: 4px solid ";
+    
+    if (isWarning) {
+      itemStyle += "#ff9800; background-color: #fff3e0;";
+    } else if (isBackup) {
+      itemStyle += "#2196f3; background-color: #e3f2fd;";
+    } else {
+      itemStyle += "#4caf50; background-color: #e8f5e8;";
+    }
+    
+    html += `<li style="${itemStyle}">`;
+    html += `<strong>${res.objectName}</strong>: <span style="font-size: 0.9em;">${res.status}</span>`;
     html += "</li>";
   });
   html += "</ul>";

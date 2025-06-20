@@ -102,46 +102,97 @@ function getFileDates(filePath) {
 
 // Esta función mejorada extrae tanto el esquema como el nombre del objeto
 function extractObjectInfoFromContent(fileContent, objectType) {
-  // Normalizar el contenido para facilitar la búsqueda
-  const content = fileContent.toString().toUpperCase();
-  
-  // Patrones a buscar según el tipo de objeto
-  // Capturamos dos grupos: (esquema).(nombre_objeto)
-  let patterns = [
-    new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+(\\w+)\\."?([\\w_]+)"?`, 'i'),
-    new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+(\\w+)\\.(\\w+)`, 'i'),
-    new RegExp(`CREATE\\s+${objectType}\\s+(\\w+)\\."?([\\w_]+)"?`, 'i'),
-    new RegExp(`CREATE\\s+${objectType}\\s+(\\w+)\\.(\\w+)`, 'i'),
-    new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+([\\w_]+)`, 'i'),
-    new RegExp(`CREATE\\s+${objectType}\\s+([\\w_]+)`, 'i'),
-    new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+([\\w$#]+)`, 'i')
-  ];
-  
-  // También para casos de PACKAGE BODY
-  if (objectType === 'PACKAGE') {
-    patterns.push(new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\."?([\\w_]+)"?', 'i'));
-    patterns.push(new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.(\\w+)', 'i'));
-    patterns.push(new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\."?([\\w_]+)"?', 'i'));
-    patterns.push(new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.(\\w+)', 'i'));
-    patterns.push(new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+([\\w$#]+)', 'i'));
-  }
-  console.log(`[extract] Buscando en contenido para tipo: ${objectType}`);
-  console.log("[extract] Contenido parcial:", content.slice(0, 300)); // primeros 300 caracteres
-  // Probar cada patrón
-  for (const pattern of patterns) {
-    const match = content.match(pattern);
-    if (match) {
-      if (match[2]) {
-        return {
-          schema: match[1],
-          objectName: match[2]
-        };
-      } else if (match[1]) {
-        return {
-          schema: null,
-          objectName: match[1]
-        };
-      }}}}
+    // Normalizar el contenido para facilitar la búsqueda
+    const content = fileContent.toString().toUpperCase();
+    
+    let patterns = [];
+    
+    // Crear patrones específicos según el tipo de objeto
+    if (objectType === 'PACKAGE') {
+        // Para PACKAGE BODY (debe ir primero para evitar conflictos)
+        patterns = [
+            // PACKAGE BODY con esquema y comillas - captura esquema y nombre
+            { regex: new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\."([\\w_]+)"', 'i'), hasSchema: true },
+            { regex: new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\."([\\w_]+)"', 'i'), hasSchema: true },
+            
+            // PACKAGE BODY con esquema sin comillas - captura esquema y nombre
+            { regex: new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.(\\w+)', 'i'), hasSchema: true },
+            { regex: new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+(\\w+)\\.(\\w+)', 'i'), hasSchema: true },
+            
+            // PACKAGE BODY con comillas SIN esquema - solo nombre
+            { regex: new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+"([\\w_]+)"', 'i'), hasSchema: false },
+            { regex: new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+"([\\w_]+)"', 'i'), hasSchema: false },
+            
+            // PACKAGE BODY sin esquema sin comillas - solo nombre
+            { regex: new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+BODY\\s+([\\w_]+)', 'i'), hasSchema: false },
+            { regex: new RegExp('CREATE\\s+PACKAGE\\s+BODY\\s+([\\w_]+)', 'i'), hasSchema: false },
+            
+            // PACKAGE (spec) con esquema y comillas - captura esquema y nombre
+            { regex: new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+(\\w+)\\."([\\w_]+)"(?!\\s+BODY)', 'i'), hasSchema: true },
+            { regex: new RegExp('CREATE\\s+PACKAGE\\s+(\\w+)\\."([\\w_]+)"(?!\\s+BODY)', 'i'), hasSchema: true },
+            
+            // PACKAGE (spec) con esquema sin comillas - captura esquema y nombre
+            { regex: new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+(\\w+)\\.(\\w+)(?!\\s+BODY)', 'i'), hasSchema: true },
+            { regex: new RegExp('CREATE\\s+PACKAGE\\s+(\\w+)\\.(\\w+)(?!\\s+BODY)', 'i'), hasSchema: true },
+            
+            // PACKAGE (spec) con comillas SIN esquema - solo nombre
+            { regex: new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+"([\\w_]+)"(?!\\s+BODY)', 'i'), hasSchema: false },
+            { regex: new RegExp('CREATE\\s+PACKAGE\\s+"([\\w_]+)"(?!\\s+BODY)', 'i'), hasSchema: false },
+            
+            // PACKAGE (spec) sin esquema sin comillas - solo nombre
+            { regex: new RegExp('CREATE\\s+OR\\s+REPLACE\\s+PACKAGE\\s+([\\w_$#]+)(?!\\s+BODY)', 'i'), hasSchema: false },
+            { regex: new RegExp('CREATE\\s+PACKAGE\\s+([\\w_$#]+)(?!\\s+BODY)', 'i'), hasSchema: false },
+        ];
+    } else {
+        // Para otros tipos (FUNCTION, PROCEDURE, etc.)
+        patterns = [
+            // Con esquema y comillas - captura esquema y nombre
+            { regex: new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+(\\w+)\\."([\\w_]+)"`, 'i'), hasSchema: true },
+            { regex: new RegExp(`CREATE\\s+${objectType}\\s+(\\w+)\\."([\\w_]+)"`, 'i'), hasSchema: true },
+            
+            // Con esquema sin comillas - captura esquema y nombre
+            { regex: new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+(\\w+)\\.(\\w+)`, 'i'), hasSchema: true },
+            { regex: new RegExp(`CREATE\\s+${objectType}\\s+(\\w+)\\.(\\w+)`, 'i'), hasSchema: true },
+            
+            // Con comillas SIN esquema - solo nombre
+            { regex: new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+"([\\w_]+)"`, 'i'), hasSchema: false },
+            { regex: new RegExp(`CREATE\\s+${objectType}\\s+"([\\w_]+)"`, 'i'), hasSchema: false },
+            
+            // Sin esquema sin comillas - solo nombre
+            { regex: new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+${objectType}\\s+([\\w_$#]+)`, 'i'), hasSchema: false },
+            { regex: new RegExp(`CREATE\\s+${objectType}\\s+([\\w_$#]+)`, 'i'), hasSchema: false },
+        ];
+    }
+    
+    console.log(`[extractObjectInfoFromContent] Buscando nombre para tipo: ${objectType}`);
+    console.log(`[extractObjectInfoFromContent] Contenido (primeros 100 chars): ${content.substring(0, 100)}`);
+    
+    // Probar cada patrón
+    for (let i = 0; i < patterns.length; i++) {
+        const pattern = patterns[i];
+        const match = content.match(pattern.regex);
+        if (match) {
+            if (pattern.hasSchema && match[1] && match[2]) {
+                console.log(`[extractObjectInfoFromContent] Patrón ${i} coincidió (con esquema): ${pattern.regex}`);
+                console.log(`[extractObjectInfoFromContent] Esquema: ${match[1]}, Nombre: ${match[2]}`);
+                return {
+                    schema: match[1],
+                    objectName: match[2]
+                };
+            } else if (!pattern.hasSchema && match[1]) {
+                console.log(`[extractObjectInfoFromContent] Patrón ${i} coincidió (sin esquema): ${pattern.regex}`);
+                console.log(`[extractObjectInfoFromContent] Nombre: ${match[1]}`);
+                return {
+                    schema: null,
+                    objectName: match[1]
+                };
+            }
+        }
+    }
+    
+    console.log('[extractObjectInfoFromContent] No se encontró nombre de objeto');
+    return null;
+}
 
 function extractSchemaAndName(fileName) {
   // Eliminar la extensión

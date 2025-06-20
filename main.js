@@ -1150,6 +1150,9 @@ async function backupObjectCode(
 }
 
 async function applyScript(connection, scriptContent) {
+  console.log('=== INICIANDO APLICACIÓN DE SCRIPT ===');
+  console.log('Contenido del script:', scriptContent.substring(0, 200) + '...');
+  
   // Dividir el contenido en bloques separados por líneas con solo "/"
   const blocks = scriptContent
     .split(/\r?\n/)
@@ -1164,14 +1167,128 @@ async function applyScript(connection, scriptContent) {
     }, [])
     .filter((block) => block.trim() !== "");
 
+  console.log(`Bloques encontrados: ${blocks.length}`);
+  
   try {
-    for (const block of blocks) {
-      await connection.execute(block);
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i].trim();
+      console.log(`\n--- Ejecutando bloque ${i + 1} ---`);
+      console.log('Contenido del bloque:', block.substring(0, 150) + '...');
+      
+      if (block.length === 0) {
+        console.log('Bloque vacío, saltando...');
+        continue;
+      }
+      
+      try {
+        const result = await connection.execute(block);
+        console.log('Bloque ejecutado exitosamente');
+        console.log('Resultado:', result);
+        
+        // Verificar si hay errores de compilación
+        if (block.toUpperCase().includes('CREATE OR REPLACE')) {
+          await checkCompilationErrors(connection, block);
+        }
+        
+      } catch (blockError) {
+        console.error(`ERROR en bloque ${i + 1}:`, blockError.message);
+        console.error('Código de error:', blockError.errorNum);
+        console.error('Stack completo:', blockError);
+        
+        // Hacer rollback explícito
+        try {
+          await connection.rollback();
+          console.log('Rollback ejecutado');
+        } catch (rollbackError) {
+          console.error('Error en rollback:', rollbackError);
+        }
+        
+        // IMPORTANTE: Retornar inmediatamente con success: false
+        return {
+          success: false,
+          error: blockError,
+          message: `Error en bloque ${i + 1}: ${blockError.message}`,
+          errorCode: blockError.errorNum
+        };
+      }
     }
+    
+    // Si llegamos aquí, todos los bloques se ejecutaron exitosamente
+    console.log('Todos los bloques ejecutados, haciendo commit...');
     await connection.commit();
-    return true;
+    console.log('Commit realizado exitosamente');
+    
+    return { success: true };
+    
   } catch (err) {
-    return err;
+    console.error('ERROR GENERAL en applyScript:', err);
+    
+    // Rollback en caso de error general
+    try {
+      await connection.rollback();
+      console.log('Rollback ejecutado por error general');
+    } catch (rollbackError) {
+      console.error('Error en rollback general:', rollbackError);
+    }
+    
+    // IMPORTANTE: Retornar inmediatamente con success: false
+    return {
+      success: false,
+      error: err,
+      message: `Error general: ${err.message}`,
+      errorCode: err.errorNum
+    };
+  }
+}
+
+// Función mejorada para verificar errores de compilación
+async function checkCompilationErrors(connection, sqlBlock) {
+  try {
+    // Extraer el nombre del objeto del bloque SQL
+    const match = sqlBlock.match(/CREATE\s+OR\s+REPLACE\s+(?:PACKAGE\s+BODY\s+|PACKAGE\s+|FUNCTION\s+|PROCEDURE\s+)([\w."]+)/i);
+    if (!match) return;
+    
+    let objectName = match[1].replace(/"/g, "");
+    if (objectName.includes('.')) {
+      objectName = objectName.split('.')[1];
+    }
+    
+    console.log(`Verificando errores de compilación para: ${objectName}`);
+    
+    // Consultar errores de compilación
+    const errorQuery = `
+      SELECT LINE, POSITION, TEXT, ATTRIBUTE
+      FROM USER_ERRORS 
+      WHERE NAME = UPPER(:objectName)
+      ORDER BY SEQUENCE
+    `;
+    
+    const result = await connection.execute(errorQuery, 
+      { objectName: objectName.toUpperCase() },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+    
+    if (result.rows && result.rows.length > 0) {
+      console.error('ERRORES DE COMPILACIÓN ENCONTRADOS:');
+      result.rows.forEach((error, index) => {
+        console.error(`Error ${index + 1}: Línea ${error.LINE}, Posición ${error.POSITION}: ${error.TEXT}`);
+      });
+      
+      // Construir mensaje de error detallado
+      const errorMessages = result.rows.map(err => 
+        `Línea ${err.LINE}: ${err.TEXT}`
+      ).join('; ');
+      
+      // IMPORTANTE: Lanzar error para que sea capturado por el catch
+      throw new Error(`Errores de compilación en ${objectName}: ${errorMessages}`);
+    }
+    
+    console.log(`No se encontraron errores de compilación para ${objectName}`);
+    
+  } catch (error) {
+    console.error('Error verificando compilación:', error);
+    // Re-lanzar el error para que sea manejado por el caller
+    throw error;
   }
 }
 ipcMain.on("apply-scripts", async (event, data) => {
@@ -1198,11 +1315,17 @@ ipcMain.on("apply-scripts", async (event, data) => {
 
   try {
     connection = await oracledb.getConnection(userSession);
+    console.log('Conexión establecida para aplicar scripts');
 
-    for (const script of scripts) {
+    for (let i = 0; i < scripts.length; i++) {
+      const script = scripts[i];
       const { schema, objectName, objectType, content } = script;
+      
+      console.log(`\n=== PROCESANDO SCRIPT ${i + 1}/${scripts.length}: ${objectName} ===`);
 
       try {
+        // Intentar crear backup
+        console.log('Creando backup...');
         const backupFile = await backupObjectCode(
           connection,
           schema,
@@ -1214,45 +1337,136 @@ ipcMain.on("apply-scripts", async (event, data) => {
         if (!backupFile) {
           results.push({
             objectName,
-            status: "No existe objeto para backup. Continuando con aplicación.",
+            status: "⚠️ Objeto no existe (nuevo) - Backup omitido",
           });
+          console.log('No se requiere backup - objeto no existe');
         } else {
           results.push({
             objectName,
-            status: `Backup creado en: ${backupFile}`,
+            status: `✅ Backup creado: ${path.basename(backupFile)}`,
           });
+          console.log(`Backup creado: ${backupFile}`);
         }
 
+        // Intentar aplicar script
+        console.log('Aplicando script...');
         const execResult = await applyScript(connection, content);
+        
+        console.log('Resultado de applyScript:', execResult);
 
-        if (execResult === true) {
-          results.push({ objectName, status: "Aplicado con éxito" });
+        // Verificar el resultado de la ejecución
+        if (execResult && execResult.success === true) {
+          results.push({ 
+            objectName, 
+            status: "✅ Aplicado con éxito" 
+          });
+          console.log(`✅ Script ${objectName} aplicado exitosamente`);
+          
         } else {
+          // ERROR DETECTADO - DETENER PROCESAMIENTO INMEDIATAMENTE
+          console.error(`❌ Error en script ${objectName}:`, execResult);
+          
+          const errorMessage = execResult?.message || 
+                             execResult?.error?.message || 
+                             'Error desconocido en la ejecución del script';
+          
           results.push({
             objectName,
-            status: "Error al aplicar",
-            error: execResult.message,
+            status: "❌ ERROR - PROCESO DETENIDO",
+            error: errorMessage,
+            errorCode: execResult?.errorCode
           });
+          
+          // Cerrar conexión inmediatamente
+          try {
+            await connection.close();
+            console.log('Conexión cerrada por error');
+          } catch (closeError) {
+            console.error('Error cerrando conexión:', closeError);
+          }
+          
+          // Enviar respuesta de error y SALIR
+          event.reply("apply-scripts-response", { 
+            success: false, 
+            results,
+            message: `❌ PROCESO DETENIDO: Error en el script "${objectName}". ${errorMessage}`,
+            stoppedAt: i + 1,
+            totalScripts: scripts.length,
+            remainingScripts: scripts.length - (i + 1)
+          });
+          return; // SALIDA INMEDIATA
         }
+
       } catch (error) {
+        // ERROR INESPERADO EN BACKUP O CUALQUIER OTRA OPERACIÓN
+        console.error(`💥 Error inesperado procesando script ${objectName}:`, error);
+        
         results.push({
           objectName,
-          status: "Error inesperado",
+          status: "💥 ERROR INESPERADO - PROCESO DETENIDO",
           error: error.message,
         });
+        
+        // Cerrar conexión inmediatamente
+        try {
+          await connection.close();
+          console.log('Conexión cerrada por error inesperado');
+        } catch (closeError) {
+          console.error('Error cerrando conexión:', closeError);
+        }
+        
+        // Enviar respuesta de error y SALIR
+        event.reply("apply-scripts-response", { 
+          success: false, 
+          results,
+          message: `💥 PROCESO DETENIDO: Error inesperado en "${objectName}". ${error.message}`,
+          stoppedAt: i + 1,
+          totalScripts: scripts.length,
+          remainingScripts: scripts.length - (i + 1)
+        });
+        return; // SALIDA INMEDIATA
       }
     }
 
-    await connection.close();
-    event.reply("apply-scripts-response", { success: true, results });
+    // Si llegamos aquí, TODOS los scripts se aplicaron exitosamente
+    console.log('🎉 TODOS LOS SCRIPTS APLICADOS EXITOSAMENTE');
+    
+    try {
+      await connection.close();
+      console.log('Conexión cerrada correctamente');
+    } catch (closeError) {
+      console.error('Error cerrando conexión:', closeError);
+    }
+    
+    event.reply("apply-scripts-response", { 
+      success: true, 
+      results,
+      message: `🎉 ÉXITO TOTAL: Todos los scripts (${scripts.length}) se aplicaron correctamente.`,
+      processedScripts: scripts.length,
+      totalScripts: scripts.length,
+      remainingScripts: 0
+    });
+    
   } catch (err) {
-    if (connection)
+    // Error de conexión general o error antes del bucle
+    console.error('💥 Error general de conexión o inicialización:', err);
+    
+    if (connection) {
       try {
         await connection.close();
-      } catch {}
+        console.log('Conexión cerrada por error general');
+      } catch (closeError) {
+        console.error('Error cerrando conexión:', closeError);
+      }
+    }
+    
     event.reply("apply-scripts-response", {
       success: false,
-      message: "Error al conectar o ejecutar: " + err.message,
+      results,
+      message: `💥 ERROR DE CONEXIÓN: ${err.message}`,
+      stoppedAt: 0,
+      totalScripts: scripts.length,
+      remainingScripts: scripts.length
     });
   }
 });
